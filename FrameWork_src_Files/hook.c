@@ -2,6 +2,17 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Full includes needed for hook.c implementation */
+#include "FaultInjection_Types.h"
+#include "NvM.h"
+#include "NvM_ConfigTypes.h"
+#include "Fls.h"
+#include "Fee.h"
+#include "Fee_Cfg.h"
+#include "Fault_state.h"
+#include "FaultInjection_Interface.h"
+#include "Fee_ConfigTypes.h"
+
 
 
 //nvm
@@ -121,7 +132,7 @@ Std_ReturnType Hook_Fee_Write(uint16 blockNumber, uint8* dataBufferPtr) {
     uint32 dataLength = GetFeeBlockLength(blockNumber);
     uint16 i;
 
-    printf("[Hook] Fee_Write Intercepted for Block %u\n", blockNumber);
+    printf("[Hook] Fee_Write Intercepted for Block*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*// %u\n", blockNumber);
 
     if ((dataBufferPtr == NULL) || (dataLength == 0)) {
         return Fee_Write(blockNumber, dataBufferPtr);

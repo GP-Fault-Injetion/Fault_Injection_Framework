@@ -293,6 +293,7 @@
 #if defined(USE_DEM)
 #include "Dem.h"
 #endif
+#define NVM_INTERNAL_BUILD
 #include "MemIf.h"
 #include "SchM_NvM.h"
 #include "MemMap.h"
@@ -342,20 +343,20 @@
 #endif
 #define DET_VALIDATE(_exp,_api,_err ) \
         if( !(_exp) ) { \
-          (void)Det_ReportError(NVM_MODULE_ID, 0, _api, _err); \
+        (void)Det_ReportError(NVM_MODULE_ID, 0, _api, _err); \
         }
 
 
 #define DET_VALIDATE_RV(_exp,_api,_err,_rv ) \
         if( !(_exp) ) { \
-          (void)Det_ReportError(NVM_MODULE_ID, 0, _api, _err); \
-          return _rv; \
+        (void)Det_ReportError(NVM_MODULE_ID, 0, _api, _err); \
+        return _rv; \
         }
 
 #define DET_VALIDATE_NO_RV(_exp,_api,_err ) \
         if( !(_exp) ) { \
-          (void)Det_ReportError(NVM_MODULE_ID, 0, _api, _err); \
-          return; \
+        (void)Det_ReportError(NVM_MODULE_ID, 0, _api, _err); \
+        return; \
         }
 #define DET_REPORTERROR(_api,_err) (void)Det_ReportError(NVM_MODULE_ID, 0,_api,_err)
 
@@ -391,17 +392,17 @@
 
 // State variable
 typedef enum {
-  NVM_UNINITIALIZED = 0,
-  NVM_IDLE,
-  NVM_READ_ALL,
-  NVM_WRITE_ALL,
-  NVM_READ_BLOCK,
-  NVM_WRITE_BLOCK,
-  NVM_RESTORE_BLOCK_DEFAULTS,
-  NVM_SETDATAINDEX,
-  NVM_GETDATAINDEX,
-  NVM_SETRAMBLOCKSTATUS,
-  NVM_INVALIDATE_NV_BLOCK,
+    NVM_UNINITIALIZED = 0,
+    NVM_IDLE,
+    NVM_READ_ALL,
+    NVM_WRITE_ALL,
+    NVM_READ_BLOCK,
+    NVM_WRITE_BLOCK,
+    NVM_RESTORE_BLOCK_DEFAULTS,
+    NVM_SETDATAINDEX,
+    NVM_GETDATAINDEX,
+    NVM_SETRAMBLOCKSTATUS,
+    NVM_INVALIDATE_NV_BLOCK,
 } NvmStateType;
 
 const char_t *StateToStr[NVM_INVALIDATE_NV_BLOCK] = {
@@ -415,7 +416,7 @@ const char_t *StateToStr[NVM_INVALIDATE_NV_BLOCK] = {
     CREATE_ENTRY(NVM_SETDATAINDEX),
     CREATE_ENTRY(NVM_GETDATAINDEX),
     CREATE_ENTRY(NVM_SETRAMBLOCKSTATUS),
- };
+};
 
 
 typedef enum {
