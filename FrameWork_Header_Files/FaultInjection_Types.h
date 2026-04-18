@@ -33,7 +33,8 @@ typedef enum {
     FAULT_DELAY,
     FAULT_OMISSION,
     FAULT_DATA_CORRUPTION,
-    FAULT_CRC_DATA_CORRUPTION
+    FAULT_CRC_DATA_CORRUPTION,
+    FAULT_PARTIAL_ERASE
 } FaultType_t;
 
 /**
@@ -64,6 +65,7 @@ typedef struct {
     
     uint8_t BitPosition;               /**< Specific bit to flip (if applicable) */
     uint32_t Mask;                     /**< Mask for MultiBit flip(if applicable)*/
+    uint32_t MaxEraseBytes;            /**< For Partial Erase: maximum bytes allowed to erase */
 } FaultConfig_t;
 
 #endif /* FAULTINJECTION_TYPES_H */

@@ -8,12 +8,15 @@
 #undef NvM_WriteBlock
 #undef NvM_ReadBlock
 #undef Fls_Write
+#undef Fls_Read
+#undef Fls_Erase
 
 extern Std_ReturnType NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr );	
 extern Std_ReturnType NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_SrcPtr );	
 extern Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length);
 extern Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length);
 extern Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length);
+extern uint8 VirtualFlashMemory[];
 
 extern const NvM_ConfigType NvM_Config;
 extern FaultConfig_t* FaultState_GetConfig(uint16_t fault_Id);
@@ -141,12 +144,21 @@ Std_ReturnType Hook_Fls_Erase(uint32 TargetAddress, uint32 Length) {
     }
 
     if (faultActive == TRUE) {
-        /* Simulate incomplete erase: only erase the first sector */
-        uint32 partialLength = FLS_SECTOR_SIZE;
-        if (partialLength > Length) {
-            partialLength = Length;
+        FaultConfig_t* cfg = FaultState_GetConfig(i);
+        
+        if (cfg->Type == FAULT_PARTIAL_ERASE) {
+             /* User's logic: Limit the erase length */
+             uint32 limitedLength = Length;
+             if (cfg->MaxEraseBytes < Length) {
+                 limitedLength = cfg->MaxEraseBytes;
+             }
+             return Fls_Erase(TargetAddress, limitedLength);
+        } else {
+            /* Fallback to original simulation: erase all but leave 1 dirty byte */
+            Std_ReturnType res = Fls_Erase(TargetAddress, Length);
+            VirtualFlashMemory[TargetAddress] = 0x00; 
+            return res;
         }
-        return Fls_Erase(TargetAddress, partialLength);
     }
 
     /* No fault active — normal erase */
