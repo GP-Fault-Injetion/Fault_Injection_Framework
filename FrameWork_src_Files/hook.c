@@ -12,6 +12,8 @@
 extern Std_ReturnType NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr );	
 extern Std_ReturnType NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_SrcPtr );	
 extern Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length);
+extern Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length);
+extern Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length);
 
 extern const NvM_ConfigType NvM_Config;
 extern FaultConfig_t* FaultState_GetConfig(uint16_t fault_Id);
@@ -94,4 +96,59 @@ Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPt
     }
 
     return Fls_Write(TargetAddress, tempBuffer, actualLen);
+}
+
+/* --- FLS READ HOOK IMPLEMENTATION --- */
+Std_ReturnType Hook_Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length) {
+    
+    /* Step 1: Call the real Fls_Read first to get data from flash */
+    Std_ReturnType result = Fls_Read(SourceAddress, TargetAddressPtr, Length);
+    
+    if (result != E_OK) {
+        return result;  /* Read failed, no point injecting */
+    }
+
+    /* Step 2: If a FLS fault is active, corrupt the read-back data */
+    uint16_t i;
+    for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if (FaultState_IsActive(FAULT_TARGET_FLS, i) == TRUE) {
+
+            /* Skip Fee headers — only corrupt user data */
+            if (IsFeeHeader(TargetAddressPtr, Length) == FALSE) {
+                if (Length >= 32) {
+                    FaultConfig_t* cfg = FaultState_GetConfig(i);
+                    Fault_Inject(TargetAddressPtr, Length, cfg);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
+/* --- FLS ERASE HOOK IMPLEMENTATION --- */
+Std_ReturnType Hook_Fls_Erase(uint32 TargetAddress, uint32 Length) {
+    
+    uint16_t i;
+    boolean faultActive = FALSE;
+
+    /* Check if any FLS fault is active */
+    for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if (FaultState_IsActive(FAULT_TARGET_FLS, i) == TRUE) {
+            faultActive = TRUE;
+            break;
+        }
+    }
+
+    if (faultActive == TRUE) {
+        /* Simulate incomplete erase: only erase the first sector */
+        uint32 partialLength = FLS_SECTOR_SIZE;
+        if (partialLength > Length) {
+            partialLength = Length;
+        }
+        return Fls_Erase(TargetAddress, partialLength);
+    }
+
+    /* No fault active — normal erase */
+    return Fls_Erase(TargetAddress, Length);
 }

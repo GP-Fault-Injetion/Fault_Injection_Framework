@@ -7,7 +7,8 @@
 typedef uint32 Fls_AddressType;
 typedef uint32 Fls_LengthType;
 
-#define FLS_ERASE_VALUE 0xFF
+#define FLS_ERASE_VALUE  0xFF
+#define FLS_SECTOR_SIZE  1024
 
 extern volatile boolean FlsJobReady;
 

@@ -2,7 +2,7 @@
 #include <string.h>
 
 /* 20KB Virtual Flash Memory */
-#define FLASH_SIZE 32768 
+#define FLASH_SIZE      32768
 static uint8 VirtualFlashMemory[FLASH_SIZE];
 static MemIf_JobResultType Fls_JobResult = MEMIF_JOB_OK;
 
@@ -16,8 +16,11 @@ void Fls_Init(const void* ConfigPtr) {
 }
 
 Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length) {
-    if ((TargetAddress + Length) > FLASH_SIZE) return E_NOT_OK;
-    memset(&VirtualFlashMemory[TargetAddress], FLS_ERASE_VALUE, Length);
+    /* Round up to the nearest sector boundary */
+    uint32 roundedLength = ((Length + FLS_SECTOR_SIZE - 1) / FLS_SECTOR_SIZE) * FLS_SECTOR_SIZE;
+
+    if ((TargetAddress + roundedLength) > FLASH_SIZE) return E_NOT_OK;
+    memset(&VirtualFlashMemory[TargetAddress], FLS_ERASE_VALUE, roundedLength);
     
     Fls_JobResult = MEMIF_JOB_OK;
     FlsJobReady = TRUE; /* Operation done immediately in stub */
