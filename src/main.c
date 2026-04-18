@@ -4,21 +4,28 @@
 #include <stdlib.h>
 
 /* AUTOSAR / Stack Headers */
+
 #include "Std_Types.h"
+#include "hook.h"
 #include "NvM.h"
 #include "MemIf.h"
+#include "Fee.h"
 #include "Crc.h"
 
 /* Fault Injection Headers */
 #define ENABLE_FAULT_INJECTION_HOOKS 
-#include "hook.h"
+
 #include "FaultInjection_Interface.h"
 #include "Fault_state.h"
+
 
 /* --- Configuration --- */
 #define TEST_BLOCK_ID   2
 #define BUFFER_SIZE     64
 #define TICK_MS         1  
+//fee
+#define FEE_TEST_BLOCK_ID   2
+#define FEE_BUFFER_SIZE     66
 
 /* --- Globals for Reporting --- */
 static int g_testsPassed = 0;
@@ -342,10 +349,89 @@ void Test_Fls_BitFlip_Visual(void) {
             printf("Status Code: %d\n", readStatus);
     }
 
-  
+
 
     AnalyzeResult("Visual Bit Flip", golden, read, TRUE);
 }
+
+
+
+
+/*----------------------------------------------------------------------*/
+void WaitForFee(void) {
+    MemIf_JobResultType job;
+    uint32_t start = GetSystemTimeMs();
+
+    do {
+        ProcessSystem(TICK_MS);
+        job = Fee_GetJobResult();
+
+        if ((GetSystemTimeMs() - start) > 2000) {
+            printf("!! TIMEOUT WAITING FOR FEE !!\n");
+            break;
+        }
+    } while (job == MEMIF_JOB_PENDING);
+}
+
+void Test_Fee_BitFlip_Visual(void) {
+    printf("=== TEST: FEE Visual Bit Flip (Bit 3) ===\n");
+    printf("   Goal: Flip Bit 3 of Byte 0 at FEE layer. Check if stored data is corrupted.\n\n");
+
+    uint8 sent[66], read[66], golden[66];
+
+    memset(sent, 0x00, 66);
+    memcpy(golden, sent, 66);
+
+    printf("[GOLDEN BUFFER - Before Write]\n");
+    PrintBuffer("Golden", golden, NULL);
+
+    Fault_Clear(FAULT_TARGET_FEE);
+    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(FAULT_TARGET_NVM);
+
+    FaultState_Activate_fault(FAULT_TARGET_FEE, FAULT_BIT_FLIP, 500, 0);
+    FaultConfig_t* cfg = FaultState_GetConfig(0);
+    cfg->Start_TimeMs = GetSystemTimeMs();
+    cfg->End_timeMs   = cfg->Start_TimeMs + 500;
+    cfg->BitPosition  = 3;
+
+    printf("\n[FAULT INJECTION ACTIVE]\n");
+    printf("Target: FEE \nType: BIT_FLIP \nByte 0, Bit 3 \n");
+    printf("Injection Window: %u ms to %u ms\n\n", cfg->Start_TimeMs, cfg->End_timeMs);
+
+    ProcessSystem(10);
+
+    printf("[WRITE PHASE]\n");
+    Std_ReturnType writeRet = Fee_Write(2, sent);
+    printf("Fee_Write Return: %d\n", writeRet);
+
+    WaitForFee();
+
+    memset(read, 0x00, 66);
+
+    printf("\n[READ PHASE]\n");
+    Std_ReturnType readRet = Fee_Read(2, 0, read, 66);
+    printf("Fee_Read Return: %d\n", readRet);
+
+    WaitForFee();
+
+    PrintBuffer("Read Back", read, golden);
+
+    printf("\n[Fee JobResult After Read]: %d\n", Fee_GetJobResult());
+
+    if (memcmp(golden, read, 66) != 0) {
+        printf("\nRESULT: Data corruption detected in Fee block.\n");
+    } else {
+        printf("\nRESULT: No corruption detected.\n");
+    }
+
+    printf("============================================================\n\n");
+}
+
+
+/*---------------------------------------------------------------------*/ 
+
+
 
 
 
@@ -366,6 +452,7 @@ int main(void) {
     
     Test_BitFlip_Immediate();
     Test_Fls_BitFlip_Visual();
+    Test_Fee_BitFlip_Visual();
     
 
 
