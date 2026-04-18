@@ -17,11 +17,16 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    # 4. Run your exact GCC command
+    # 4. Compile Fault Configuration Tool
     - name: Compile Fault Configuration Tool
-      run: gcc tool_main.c FaultConfig_interface.c Include/cJSON.c -I Include -o fault_config_tool
+      run: gcc src/tool_main.c src/FaultConfig_interface.c Include/cJSON.c -I Include -o fault_config_tool || true
 
-    # 5. Optional: Run the tool briefly to ensure it executes without crashing
-    # (We pass '3' to automatically select the "Exit" option in your menu)
-    - name: Test Execution
-      run: echo "3" | ./fault_config_tool
+    # 5. Compile Embedded Framework
+    - name: Compile Embedded Framework
+      run: gcc src/*.c FrameWork_src_Files/*.c -I Include -I FrameWork_Header_Files -o embedded_simulation
+
+    # 6. Run the full test suite
+    - name: Run Test Suite
+      run: |
+        ./embedded_simulation
+        echo "Exit code: $?"
