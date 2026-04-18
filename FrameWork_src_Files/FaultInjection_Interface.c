@@ -1,4 +1,5 @@
 #include "FaultInjection_Interface.h"
+#include <stddef.h>
 
 Std_ReturnType Fault_Init(void) {
     FaultState_Init();
