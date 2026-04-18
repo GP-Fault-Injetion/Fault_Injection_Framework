@@ -63,7 +63,73 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
 
 /* --- READ HOOK --- */
 Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
-    return NvM_ReadBlock(blockId, NvM_DstPtr);
+    uint16_t i;
+    Std_ReturnType retVal = E_OK;
+    boolean callOriginal = TRUE;
+    boolean corruptReturnValue = FALSE;
+    NvM_BlockIdType activeBlockId = blockId;
+
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             uint32_t dataLength = GetNvMBlockLength(activeBlockId);
+             
+             switch(cfg->Type) {
+                 case FAULT_DELAY:
+                 {
+                     /* Simulate Delay using a busy wait loop */
+                     volatile uint32_t delayCount = 10000; /* Arbitrary dummy value */
+                     while(delayCount--) {}
+                     break;
+                 }
+                 case FAULT_OMISSION:
+                 case FAULT_QUEUE_OVERFLOW:
+                 {
+                     /* Return without executing */
+                     callOriginal = FALSE;
+                     retVal = E_NOT_OK;
+                     break;
+                 }
+                 case FAULT_PARAMETER_CORRUPTION:
+                 {
+                     /* Corrupt the Block ID so NvM_ReadBlock rejects it */
+                     activeBlockId ^= 0xFFFF;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 {
+                     corruptReturnValue = TRUE;
+                     break;
+                 }
+                 case FAULT_DATA_CORRUPTION:
+                 case FAULT_CRC_DATA_CORRUPTION:
+                 case FAULT_BIT_FLIP:
+                 case FAULT_MULTI_BIT_FLIP:
+                 case FAULT_STUCK_AT_0:
+                 case FAULT_STUCK_AT_1:
+                 {
+                     /* For structural consistency, we inject here. 
+                        Note: For asynchronous reads, actual corruption 
+                        should ideally happen after data is placed in DstPtr. */
+                     if(dataLength > 0 && NvM_DstPtr != NULL) {
+                         Fault_Inject((uint8*)NvM_DstPtr, dataLength, cfg);
+                     }
+                     break;
+                 }
+                 default:
+                     break;
+             }
+        }
+    }
+
+    if(callOriginal == TRUE) {
+        retVal = NvM_ReadBlock(activeBlockId, NvM_DstPtr);
+        if(corruptReturnValue == TRUE) {
+            retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
+        }
+    }
+
+    return retVal;
 }
 
 /* --- FLS WRITE HOOK IMPLEMENTATION --- */

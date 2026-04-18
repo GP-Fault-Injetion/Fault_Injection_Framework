@@ -31,7 +31,7 @@
 /* --- Virtual Flash Layout --- */
 #define FEE_INDEX                       0
 #define FEE_VIRTUAL_PAGE_SIZE           8        /* Alignment size (8 bytes) */
-#define FEE_NUM_OF_BLOCKS               2        /* Count of configured blocks (0 & 1) */
+#define FEE_NUM_OF_BLOCKS               5        /* Count of configured blocks */
 
 /* --- Sector Management --- */
 /* These control how Fee uses the Fls (Flash) driver */

@@ -28,16 +28,40 @@ const Fee_BlockConfigType Fee_BlockConfig[FEE_NUM_OF_BLOCKS] = {
     /* Block 0: RESERVED/CONFIG Block (Mapped to NvM Block 1) */
     {
         .DeviceIndex = 0,
-        .BlockNumber = 1,       /* Matches NvM NvBlockNum */
-        .BlockSize = 66,        /* Size in bytes */
+        .BlockNumber = 1,
+        .BlockSize = 66,
         .ImmediateData = FALSE,
         .NumberOfWriteCycles = 0
     },
-    /* Block 1: DATA Block (Mapped to NvM Block 2 - Our Test Block) */
+    /* Block 1: DATA Block (Mapped to NvM Block 2 - Redundant Primary) */
     {
         .DeviceIndex = 0,
-        .BlockNumber = 2,       /* Matches NvM NvBlockNum */
-        .BlockSize = 66,        /* Size in bytes */
+        .BlockNumber = 2,
+        .BlockSize = 66,
+        .ImmediateData = FALSE,
+        .NumberOfWriteCycles = 0
+    },
+    /* Block 2: DATA Block (Mapped to NvM Block 2 - Redundant Secondary) */
+    {
+        .DeviceIndex = 0,
+        .BlockNumber = 3,
+        .BlockSize = 66,
+        .ImmediateData = FALSE,
+        .NumberOfWriteCycles = 0
+    },
+    /* Block 3: DATA Block (Mapped to NvM Block 3 - Native with ROM) */
+    {
+        .DeviceIndex = 0,
+        .BlockNumber = 4,
+        .BlockSize = 66,
+        .ImmediateData = FALSE,
+        .NumberOfWriteCycles = 0
+    },
+    /* Block 4: DATA Block (Mapped to NvM Block 4 - Native no ROM) */
+    {
+        .DeviceIndex = 0,
+        .BlockNumber = 5,
+        .BlockSize = 66,
         .ImmediateData = FALSE,
         .NumberOfWriteCycles = 0
     }
