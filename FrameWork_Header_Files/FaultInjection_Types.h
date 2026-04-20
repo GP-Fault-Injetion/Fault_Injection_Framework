@@ -7,51 +7,8 @@
  * @file FaultInjection_Types.h
  * @brief Global type definitions for the Fault Injection Framework (FR-01).
  */
-
-/**
- * @name Target Module&Service IDs (Memory Stack)
- * @brief Standard AUTOSAR IDs used to identify the target for injection. Format: 0x[ModuleID_Hex][ServiceID_Hex]
- * @{
- */
-
-/* --- NvM Targets --- */
-#define TARGET_NVM_INIT                   0x1400
-#define TARGET_NVM_SET_DATA_INDEX         0x1401
-#define TARGET_NVM_GET_ERROR_STATUS       0x1404
-#define TARGET_NVM_READ_BLOCK             0x1406
-#define TARGET_NVM_WRITE_BLOCK            0x1407
-#define TARGET_NVM_READ_ALL               0x140C
-#define TARGET_NVM_WRITE_ALL              0x140D
-#define TARGET_NVM_INVALIDATE_NV_BLOCK    0x140F
-#define TARGET_NVM_ERASE_NV_BLOCK         0x1410
-#define TARGET_NVM_MAIN_FUNCTION          0x1411
-
-/* --- Fee Targets --- */
-#define TARGET_FEE_INIT                   0x1500
-#define TARGET_FEE_READ                   0x1502
-#define TARGET_FEE_WRITE                  0x1503
-#define TARGET_FEE_GET_STATUS             0x1505
-#define TARGET_FEE_GET_JOB_RESULT         0x1506
-#define TARGET_FEE_INVALIDATE_BLOCK       0x1507
-#define TARGET_FEE_MAIN_FUNCTION          0x1512
-
-/* --- MemIf Targets --- */
-#define TARGET_MEMIF_READ                 0x1602
-#define TARGET_MEMIF_WRITE                0x1603
-#define TARGET_MEMIF_GET_STATUS           0x1605
-#define TARGET_MEMIF_GET_JOB_RESULT       0x1606
-#define TARGET_MEMIF_INVALIDATE_BLOCK     0x1607
-#define TARGET_MEMIF_ERASE_IMM_BLOCK      0x1608
-
-/* --- Fls Targets --- */
-#define TARGET_FLS_INIT                   0x5C00
-#define TARGET_FLS_ERASE                  0x5C01
-#define TARGET_FLS_WRITE                  0x5C02
-#define TARGET_FLS_READ                   0x5C03
-#define TARGET_FLS_GET_STATUS             0x5C05
-#define TARGET_FLS_GET_JOB_RESULT         0x5C06
-#define TARGET_FLS_MAIN_FUNCTION          0x5CFF
-/** @} */
+ 
+#include "Target_Stack.h" /* For TargetModuleServiceID definitions */
 
 /**
  * @brief Enumeration of supported fault types.
