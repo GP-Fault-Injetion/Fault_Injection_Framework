@@ -76,34 +76,72 @@ Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPt
     
     uint8 tempBuffer[512]; 
     uint32 actualLen = (Length > 512) ? 512 : Length;
+    uint8* dataPtr = NULL;
+    uint32 dataLen = Length;
+    uint32 targetAddr = TargetAddress;
+    uint32 paramCorruptionActive = 0;
 
-    memcpy(tempBuffer, SourceAddressPtr, actualLen);
-
+    /* --- CHECK FOR PARAMETER CORRUPTION --- */
     uint16_t i;
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
-             
-             /* SMART FILTERING: Check for Magic Number */
-             if (IsFeeHeader(SourceAddressPtr, actualLen) == FALSE) {
-                 
-                 /* Double Check: Only inject if size looks like Data (>= 32) */
-                 if (Length >= 32) {
-                     FaultConfig_t* cfg = FaultState_GetConfig(i);
-                     // printf("[Hook] Injecting FLS Fault on Data (Len=%d)\n", Length);
-                     Fault_Inject(tempBuffer, actualLen, cfg);
-                 }
-             } else {
-                 // printf("[Hook] Fee Header Detected. Skipping.\n");
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             if (cfg->Type == FAULT_PARAMETER_CORRUPTION) {
+                 paramCorruptionActive = 1;
+                 /* Corrupt a parameter: Set Data Pointer to NULL to test [FLS157] */
+                 dataPtr = NULL_PTR;
+                 printf("[TEST] Corrupted Fls_Write parameter: SourceAddressPtr -> NULL\n");
+                 /* Call with NULL pointer - FLS should reject it */
+                 return Fls_Write(targetAddr, dataPtr, dataLen);
              }
         }
     }
 
-    return Fls_Write(TargetAddress, tempBuffer, actualLen);
+    /* --- NO PARAMETER CORRUPTION - Normal data injection flow --- */
+    if (paramCorruptionActive == 0 && SourceAddressPtr != NULL) {
+        memcpy(tempBuffer, SourceAddressPtr, actualLen);
+
+        for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+            if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
+                 
+                 /* SMART FILTERING: Check for Magic Number */
+                 if (IsFeeHeader(SourceAddressPtr, actualLen) == FALSE) {
+                     
+                     /* Double Check: Only inject if size looks like Data (>= 32) */
+                     if (Length >= 32) {
+                         FaultConfig_t* cfg = FaultState_GetConfig(i);
+                         // printf("[Hook] Injecting FLS Fault on Data (Len=%d)\n", Length);
+                         Fault_Inject(tempBuffer, actualLen, cfg);
+                     }
+                 } else {
+                     // printf("[Hook] Fee Header Detected. Skipping.\n");
+                 }
+            }
+        }
+        return Fls_Write(TargetAddress, tempBuffer, actualLen);
+    }
+
+    return E_OK;
 }
 
 /* --- FLS READ HOOK IMPLEMENTATION --- */
 Std_ReturnType Hook_Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length) {
     
+    /* --- CHECK FOR PARAMETER CORRUPTION FIRST --- */
+    uint16_t i;
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(TARGET_FLS_READ, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             if (cfg->Type == FAULT_PARAMETER_CORRUPTION) {
+                 /* Corrupt a parameter: Set Target Pointer to NULL to test [FLS158] */
+                 printf("[TEST] Corrupted Fls_Read parameter: TargetAddressPtr -> NULL\n");
+                 /* Call with NULL pointer - FLS should reject it */
+                 return Fls_Read(SourceAddress, NULL_PTR, Length);
+             }
+        }
+    }
+    
+    /* --- NO PARAMETER CORRUPTION - Normal data injection flow --- */
     /* Step 1: Call the real Fls_Read first to get data from flash */
     Std_ReturnType result = Fls_Read(SourceAddress, TargetAddressPtr, Length);
     
@@ -112,7 +150,6 @@ Std_ReturnType Hook_Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint
     }
 
     /* Step 2: If a FLS fault is active, corrupt the read-back data */
-    uint16_t i;
     for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if (FaultState_IsActive(TARGET_FLS_READ, i) == TRUE) {
 

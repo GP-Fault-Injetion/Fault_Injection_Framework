@@ -1,5 +1,6 @@
 #include "NvM.h"
 #include "NvM_ConfigTypes.h"
+#include "Std_Types.h"
 
 /* RAM Mirrors for the Blocks */
 uint8 RamBlock1_Reserved[64];
@@ -11,7 +12,7 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
     {
         .NvramBlockIdentifier = 0,
         .BlockManagementType = NVM_BLOCK_NATIVE,
-        .RamBlockDataAddress = NULL, 
+        .RamBlockDataAddress = NULL_PTR, 
         .NvBlockLength = 0
         /* Other fields 0/NULL */
     },
@@ -56,7 +57,7 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
 
 const NvM_ConfigType NvM_Config = {
     .Common = {
-        .MultiBlockCallback = NULL
+        .MultiBlockCallback = NULL_PTR
     },
     .BlockDescriptor = BlockDescriptors
 };

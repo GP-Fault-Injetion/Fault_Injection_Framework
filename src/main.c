@@ -465,6 +465,78 @@
         }
         printf("============================================================\n\n");
     }
+
+    /* =========================================================================
+    * PARAMETER CORRUPTION TESTS (FLS157, FLS158)
+    * ========================================================================= */
+
+    void Test_Fls_Write_ParameterCorruption_NullPointer(void) {
+        printf("=== TEST 5: Fls_Write Parameter Corruption (Null Data Pointer) ===\n");
+        printf("   Goal: Call Fls_Write with NULL data pointer. Verify FLS rejects request [FLS157].\n\n");
+
+        printf("[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS \n");
+        printf("Type: PARAMETER_CORRUPTION \n");
+        printf("Parameter: SourceAddressPtr (NULL pointer)\n\n");
+
+        printf("[WRITE PHASE WITH NULL POINTER]\n");
+        uint32 targetAddress = 0x100;
+        uint32 length = 64;
+        
+        Std_ReturnType result = Fls_Write(targetAddress, (const uint8*)NULL, length);
+
+        printf(">>> Fls_Write(0x%X, NULL, %u) called\n\n", targetAddress, length);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   FLS correctly REJECTED the operation with E_NOT_OK\n");
+            printf("   Detector: FLS Module (Parameter Validation)\n");
+            printf("   [Requirement]: FLS157 - Null pointer check passed\n");
+            printf("   RESULT:   [PASS]\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   FLS did NOT reject the operation (returned %d instead of E_NOT_OK)\n", result);
+            printf("   Detector: Application (Parameter validation FAILED)\n");
+            printf("   [Requirement]: FLS157 - Null pointer check FAILED\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
+
+    void Test_Fls_Read_ParameterCorruption_NullPointer(void) {
+        printf("=== TEST 6: Fls_Read Parameter Corruption (Null Target Pointer) ===\n");
+        printf("   Goal: Call Fls_Read with NULL target pointer. Verify FLS rejects request [FLS158].\n\n");
+
+        printf("[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS \n");
+        printf("Type: PARAMETER_CORRUPTION \n");
+        printf("Parameter: TargetAddressPtr (NULL pointer)\n\n");
+
+        printf("[READ PHASE WITH NULL POINTER]\n");
+        uint32 sourceAddress = 0x100;
+        uint32 length = 64;
+        
+        Std_ReturnType result = Fls_Read(sourceAddress, (uint8*)NULL, length);
+
+        printf(">>> Fls_Read(0x%X, NULL, %u) called\n\n", sourceAddress, length);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   FLS correctly REJECTED the operation with E_NOT_OK\n");
+            printf("   Detector: FLS Module (Parameter Validation)\n");
+            printf("   [Requirement]: FLS158 - Null pointer check passed\n");
+            printf("   RESULT:   [PASS]\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   FLS did NOT reject the operation (returned %d instead of E_NOT_OK)\n", result);
+            printf("   Detector: Application (Parameter validation FAILED)\n");
+            printf("   [Requirement]: FLS158 - Null pointer check FAILED\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
     
     /* =========================================================================
     * MAIN ENTRY
@@ -481,10 +553,12 @@
         Fault_Init(); 
             
         
-        /* Test_BitFlip_Immediate(); */
-        /* Test_Fls_BitFlip_Visual(); */
+        Test_BitFlip_Immediate(); 
+        Test_Fls_BitFlip_Visual(); 
         Test_Fls_Read_DataCorruption();
         Test_Fls_Erase_DataCorruption();
+        Test_Fls_Write_ParameterCorruption_NullPointer();
+        Test_Fls_Read_ParameterCorruption_NullPointer();
         //Test_Fls_Erase_SectorOne_SilentFailure();
 
 

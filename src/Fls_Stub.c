@@ -40,6 +40,11 @@ Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length) {
 }
 
 Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length) {
+    /* FLS157: Check for null data pointer */
+    if (SourceAddressPtr == NULL_PTR) {
+        return E_NOT_OK;
+    }
+    
     if ((TargetAddress + Length) > FLASH_SIZE) return E_NOT_OK;
     memcpy(&VirtualFlashMemory[TargetAddress], SourceAddressPtr, Length);
     
@@ -50,6 +55,11 @@ Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, ui
 }
 
 Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length) {
+    /* FLS158: Check for null data pointer */
+    if (TargetAddressPtr == NULL) {
+        return E_NOT_OK;
+    }
+    
     if ((SourceAddress + Length) > FLASH_SIZE) return E_NOT_OK;
     memcpy(TargetAddressPtr, &VirtualFlashMemory[SourceAddress], Length);
     
