@@ -1,5 +1,6 @@
 #include "FaultBitLogic.h"
 #include "Platform_Types.h"
+#include <stddef.h>
 
 /**
  * @brief Single Bit Flip Logic
