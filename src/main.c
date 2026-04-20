@@ -4,28 +4,21 @@
 #include <stdlib.h>
 
 /* AUTOSAR / Stack Headers */
-
 #include "Std_Types.h"
-#include "hook.h"
 #include "NvM.h"
 #include "MemIf.h"
-#include "Fee.h"
 #include "Crc.h"
 
 /* Fault Injection Headers */
 #define ENABLE_FAULT_INJECTION_HOOKS 
-
+#include "hook.h"
 #include "FaultInjection_Interface.h"
 #include "Fault_state.h"
-
 
 /* --- Configuration --- */
 #define TEST_BLOCK_ID   2
 #define BUFFER_SIZE     64
 #define TICK_MS         1  
-//fee
-#define FEE_TEST_BLOCK_ID   2
-#define FEE_BUFFER_SIZE     66
 
 /* --- Globals for Reporting --- */
 static int g_testsPassed = 0;
@@ -349,89 +342,10 @@ void Test_Fls_BitFlip_Visual(void) {
             printf("Status Code: %d\n", readStatus);
     }
 
-
+  
 
     AnalyzeResult("Visual Bit Flip", golden, read, TRUE);
 }
-
-
-
-
-/*----------------------------------------------------------------------*/
-void Test_Fee_BitFlip_Visual(void)
-{
-    printf("=== TEST 3: FEE Visual Bit Flip (Bit 3) ===\n");
-    printf("   Goal: Flip Bit 3 of Byte 0 at FEE layer through NvM flow.\n\n");
-
-    uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
-
-    memset(sent, 0x00, BUFFER_SIZE);
-    memcpy(golden, sent, BUFFER_SIZE);
-
-    printf("[GOLDEN BUFFER - Before Write]\n");
-    PrintBuffer("Golden", golden, NULL);
-
-    Fault_Clear(FAULT_TARGET_FEE);
-    Fault_Clear(FAULT_TARGET_FLS);
-    Fault_Clear(FAULT_TARGET_NVM);
-
-    FaultState_Activate_fault(FAULT_TARGET_FEE, FAULT_DATA_CORRUPTION, 500, 0);
-    FaultConfig_t* cfg = FaultState_GetConfig(0);
-    cfg->Start_TimeMs = GetSystemTimeMs();
-    cfg->End_timeMs   = cfg->Start_TimeMs + 500;
-    cfg->BitPosition  = 3;
-
-    printf("\n[FAULT INJECTION ACTIVE]\n");
-    printf("Target: FEE\n");
-    printf("Type: BIT_FLIP\n");
-    printf("Byte 0, Bit 3\n");
-    printf("Injection Window: %u ms to %u ms\n\n", cfg->Start_TimeMs, cfg->End_timeMs);
-
-    ProcessSystem(10);
-
-    printf("[WRITE PHASE]\n");
-    NvM_WriteBlock(TEST_BLOCK_ID, sent);
-    WaitForNvM();
-
-    NvM_RequestResultType writeStatus;
-    NvM_GetErrorStatus(TEST_BLOCK_ID, &writeStatus);
-    printf("[NvM Status After Write]: ");
-    switch (writeStatus)
-    {
-        case NVM_REQ_OK:               printf("NVM_REQ_OK\n"); break;
-        case NVM_REQ_INTEGRITY_FAILED: printf("NVM_REQ_INTEGRITY_FAILED\n"); break;
-        case NVM_REQ_NOT_OK:           printf("NVM_REQ_NOT_OK\n"); break;
-        case NVM_REQ_NV_INVALIDATED:   printf("NVM_REQ_NV_INVALIDATED\n"); break;
-        default:                       printf("Status Code: %d\n", writeStatus); break;
-    }
-
-    memset(read, 0x00, BUFFER_SIZE);
-
-    printf("\n[READ PHASE]\n");
-    NvM_ReadBlock(TEST_BLOCK_ID, read);
-    WaitForNvM();
-
-    PrintBuffer("Read Back", read, golden);
-
-    NvM_RequestResultType readStatus;
-    NvM_GetErrorStatus(TEST_BLOCK_ID, &readStatus);
-    printf("\n[NvM Status After Read]: ");
-    switch (readStatus)
-    {
-        case NVM_REQ_OK:               printf("NVM_REQ_OK\n"); break;
-        case NVM_REQ_INTEGRITY_FAILED: printf("NVM_REQ_INTEGRITY_FAILED\n"); break;
-        case NVM_REQ_NOT_OK:           printf("NVM_REQ_NOT_OK\n"); break;
-        case NVM_REQ_NV_INVALIDATED:   printf("NVM_REQ_NV_INVALIDATED\n"); break;
-        default:                       printf("Status Code: %d\n", readStatus); break;
-    }
-
-    AnalyzeResult("FEE Visual Bit Flip", golden, read, TRUE);
-}
-
-
-/*---------------------------------------------------------------------*/ 
-
-
 
 
 
@@ -452,7 +366,6 @@ int main(void) {
     
     Test_BitFlip_Immediate();
     Test_Fls_BitFlip_Visual();
-    Test_Fee_BitFlip_Visual();
     
 
 

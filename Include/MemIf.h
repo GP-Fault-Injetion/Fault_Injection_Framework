@@ -57,9 +57,6 @@
 #include "Ea.h"
 #endif
 
-/* Include hook header to enable fault injection macro redirection */
-#include "hook.h"
-
 /* @req MemIf061 */
 #if (MEMIF_NUMBER_OF_DEVICES > 2)
 #error "MemIf: Only 2 devices supported"

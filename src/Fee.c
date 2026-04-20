@@ -91,7 +91,6 @@
 #include "MemMap.h"
 #include "Cpu.h"
 #include "SchM_Fee.h"
-#define FEE_INTERNAL_BUILD
 #include "hook.h"
 /* The FLS_ERASED_VALIUE is not published by some MCALs,
  * this is a way around this.
