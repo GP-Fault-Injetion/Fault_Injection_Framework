@@ -17,7 +17,6 @@
 /* !req MemIf062 *//* No version check of included modules is done */
 /* @req MemIf006 */
 #include "MemIf.h"
-
 /*lint -emacro(904,VALIDATE_RV,VALIDATE)*/ /*904 PC-Lint exception to MISRA 14.7 (validate DET macros)*/
 
 #if (MEMIF_NUMBER_OF_DEVICES > 1)

@@ -358,29 +358,15 @@ void Test_Fls_BitFlip_Visual(void) {
 
 
 /*----------------------------------------------------------------------*/
-void WaitForFee(void) {
-    MemIf_JobResultType job;
-    uint32_t start = GetSystemTimeMs();
+void Test_Fee_BitFlip_Visual(void)
+{
+    printf("=== TEST 3: FEE Visual Bit Flip (Bit 3) ===\n");
+    printf("   Goal: Flip Bit 3 of Byte 0 at FEE layer through NvM flow.\n\n");
 
-    do {
-        ProcessSystem(TICK_MS);
-        job = Fee_GetJobResult();
+    uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
 
-        if ((GetSystemTimeMs() - start) > 2000) {
-            printf("!! TIMEOUT WAITING FOR FEE !!\n");
-            break;
-        }
-    } while (job == MEMIF_JOB_PENDING);
-}
-
-void Test_Fee_BitFlip_Visual(void) {
-    printf("=== TEST: FEE Visual Bit Flip (Bit 3) ===\n");
-    printf("   Goal: Flip Bit 3 of Byte 0 at FEE layer. Check if stored data is corrupted.\n\n");
-
-    uint8 sent[66], read[66], golden[66];
-
-    memset(sent, 0x00, 66);
-    memcpy(golden, sent, 66);
+    memset(sent, 0x00, BUFFER_SIZE);
+    memcpy(golden, sent, BUFFER_SIZE);
 
     printf("[GOLDEN BUFFER - Before Write]\n");
     PrintBuffer("Golden", golden, NULL);
@@ -389,43 +375,57 @@ void Test_Fee_BitFlip_Visual(void) {
     Fault_Clear(FAULT_TARGET_FLS);
     Fault_Clear(FAULT_TARGET_NVM);
 
-    FaultState_Activate_fault(FAULT_TARGET_FEE, FAULT_BIT_FLIP, 500, 0);
+    FaultState_Activate_fault(FAULT_TARGET_FEE, FAULT_DATA_CORRUPTION, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs   = cfg->Start_TimeMs + 500;
     cfg->BitPosition  = 3;
 
     printf("\n[FAULT INJECTION ACTIVE]\n");
-    printf("Target: FEE \nType: BIT_FLIP \nByte 0, Bit 3 \n");
+    printf("Target: FEE\n");
+    printf("Type: BIT_FLIP\n");
+    printf("Byte 0, Bit 3\n");
     printf("Injection Window: %u ms to %u ms\n\n", cfg->Start_TimeMs, cfg->End_timeMs);
 
     ProcessSystem(10);
 
     printf("[WRITE PHASE]\n");
-    Std_ReturnType writeRet = Fee_Write(2, sent);
-    printf("Fee_Write Return: %d\n", writeRet);
+    NvM_WriteBlock(TEST_BLOCK_ID, sent);
+    WaitForNvM();
 
-    WaitForFee();
+    NvM_RequestResultType writeStatus;
+    NvM_GetErrorStatus(TEST_BLOCK_ID, &writeStatus);
+    printf("[NvM Status After Write]: ");
+    switch (writeStatus)
+    {
+        case NVM_REQ_OK:               printf("NVM_REQ_OK\n"); break;
+        case NVM_REQ_INTEGRITY_FAILED: printf("NVM_REQ_INTEGRITY_FAILED\n"); break;
+        case NVM_REQ_NOT_OK:           printf("NVM_REQ_NOT_OK\n"); break;
+        case NVM_REQ_NV_INVALIDATED:   printf("NVM_REQ_NV_INVALIDATED\n"); break;
+        default:                       printf("Status Code: %d\n", writeStatus); break;
+    }
 
-    memset(read, 0x00, 66);
+    memset(read, 0x00, BUFFER_SIZE);
 
     printf("\n[READ PHASE]\n");
-    Std_ReturnType readRet = Fee_Read(2, 0, read, 66);
-    printf("Fee_Read Return: %d\n", readRet);
-
-    WaitForFee();
+    NvM_ReadBlock(TEST_BLOCK_ID, read);
+    WaitForNvM();
 
     PrintBuffer("Read Back", read, golden);
 
-    printf("\n[Fee JobResult After Read]: %d\n", Fee_GetJobResult());
-
-    if (memcmp(golden, read, 66) != 0) {
-        printf("\nRESULT: Data corruption detected in Fee block.\n");
-    } else {
-        printf("\nRESULT: No corruption detected.\n");
+    NvM_RequestResultType readStatus;
+    NvM_GetErrorStatus(TEST_BLOCK_ID, &readStatus);
+    printf("\n[NvM Status After Read]: ");
+    switch (readStatus)
+    {
+        case NVM_REQ_OK:               printf("NVM_REQ_OK\n"); break;
+        case NVM_REQ_INTEGRITY_FAILED: printf("NVM_REQ_INTEGRITY_FAILED\n"); break;
+        case NVM_REQ_NOT_OK:           printf("NVM_REQ_NOT_OK\n"); break;
+        case NVM_REQ_NV_INVALIDATED:   printf("NVM_REQ_NV_INVALIDATED\n"); break;
+        default:                       printf("Status Code: %d\n", readStatus); break;
     }
 
-    printf("============================================================\n\n");
+    AnalyzeResult("FEE Visual Bit Flip", golden, read, TRUE);
 }
 
 
