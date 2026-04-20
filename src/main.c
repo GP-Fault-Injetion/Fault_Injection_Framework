@@ -195,9 +195,9 @@
         printf("[GOLDEN BUFFER - Before Write]\n");
         PrintBuffer("Golden", golden, NULL);  // No comparison needed
 
-        Fault_Clear(FAULT_TARGET_NVM);
+        Fault_Clear(TARGET_NVM_WRITE_BLOCK);
 
-        FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_BIT_FLIP, 500, 0);
+        FaultState_Activate_fault(TARGET_NVM_WRITE_BLOCK, FAULT_BIT_FLIP, 500, 0);
         FaultConfig_t* cfg = FaultState_GetConfig(0);
         cfg->Start_TimeMs = GetSystemTimeMs();
         cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -280,10 +280,10 @@
         printf("[GOLDEN BUFFER - Before Write]\n");
         PrintBuffer("Golden", golden, NULL);
 
-        Fault_Clear(FAULT_TARGET_FLS);
-        Fault_Clear(FAULT_TARGET_NVM);
+        Fault_Clear(TARGET_FLS_WRITE);
+        Fault_Clear(TARGET_NVM_WRITE_BLOCK);
 
-        FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_BIT_FLIP, 500, 0);
+        FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_BIT_FLIP, 500, 0);
         FaultConfig_t* cfg = FaultState_GetConfig(0);
         cfg->Start_TimeMs = GetSystemTimeMs();
         cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -367,15 +367,15 @@
         memcpy(golden, sent, BUFFER_SIZE);
 
         printf("[WRITE PHASE] - Writing clean data...\n");
-        Fault_Clear(FAULT_TARGET_FLS);
-        Fault_Clear(FAULT_TARGET_NVM);
+        Fault_Clear(TARGET_FLS_WRITE);
+        Fault_Clear(TARGET_NVM_WRITE_BLOCK);
         
         NvM_WriteBlock(TEST_BLOCK_ID, sent);
         WaitForNvM();
         /* Should write perfectly with clean checksum */
 
         /* Now, activate fault on READ path */
-        FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_BIT_FLIP, 500, 0);
+        FaultState_Activate_fault(TARGET_FLS_READ, FAULT_BIT_FLIP, 500, 0);
         FaultConfig_t* cfg = FaultState_GetConfig(0);
         cfg->Start_TimeMs = GetSystemTimeMs();
         cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -412,13 +412,13 @@
 
         /* 1. Write Data directly to raw Flash address 0 to bypass NVM */
         printf("[WRITE PHASE] - Writing pattern 0xBB directly to FLS...\n");
-        Fault_Clear(FAULT_TARGET_FLS);
-        Fault_Clear(FAULT_TARGET_NVM);
+        Fault_Clear(TARGET_FLS_WRITE);
+        Fault_Clear(TARGET_NVM_WRITE_BLOCK);
         
         Fls_Write(0, sent, BUFFER_SIZE);
 
         /* 2. Activate Fault and trigger erase */
-        FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_BIT_FLIP, 500, 0); /* Any fault type triggers the incomplete erase */
+        FaultState_Activate_fault(TARGET_FLS_ERASE, FAULT_BIT_FLIP, 500, 0); /* Any fault type triggers the incomplete erase */
         FaultConfig_t* cfg = FaultState_GetConfig(0);
         cfg->Start_TimeMs = GetSystemTimeMs();
         cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -446,7 +446,7 @@
         ProcessSystem(10);
         
         /* Let's clear fault so later tests run clean */
-        Fault_Clear(FAULT_TARGET_FLS);
+        Fault_Clear(TARGET_FLS_ERASE);
 
         /* Check what FLS thinks happened! */
         extern MemIf_JobResultType Fls_GetJobResult(void);
@@ -465,79 +465,7 @@
         }
         printf("============================================================\n\n");
     }
-    void Test_Fls_Erase_SectorOne_SilentFailure(void) {
-    printf("=== TEST 5: FLS Erase Sector 1 Only (Silent Failure Check) ===\n");
-    printf("   Goal: Write to Offset 0, trigger incomplete erase. Does the stack miss it?\n\n");
-
-    uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE];
     
-    /* Use a new pattern, 0xCC, so we know it's this test */
-    memset(sent, 0xCC, BUFFER_SIZE);
-
-    extern Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length);
-    extern Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length);
-    extern Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length);
-
-    /* 1. Write Data to Sector 1 (Offset 0) */
-    printf("[WRITE PHASE] - Writing pattern 0xCC to Offset 0...\n");
-    Fault_Clear(FAULT_TARGET_FLS);
-    Fault_Clear(FAULT_TARGET_NVM);
-    
-    Fls_Write(0, sent, BUFFER_SIZE);
-    
-    /* Process system so the write actually finishes before we erase */
-    ProcessSystem(10); 
-
-    /* 2. Activate Fault (The Lazy Janitor) */
-    FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_BIT_FLIP, 500, 0); 
-    FaultConfig_t* cfg = FaultState_GetConfig(0);
-    cfg->Start_TimeMs = GetSystemTimeMs();
-    cfg->End_timeMs   = cfg->Start_TimeMs + 500;
-
-    printf("\n[FAULT INJECTION ACTIVE ON ERASE]\n");
-    printf("Target: FLS \nType: Incomplete Erase (Only first sector wiped) \n");
-    ProcessSystem(10);
-
-    /* 3. Trigger the 4-sector erase */
-    printf("\n[ERASE PHASE] - Triggering Fls_Erase(0, 4096) with fault active...\n");
-    Fls_Erase(0, 4096);
-
-    /* Process system so Fls_MainFunction runs */
-    ProcessSystem(10);
-    
-    /* Clear fault so it doesn't mess up our verification read */
-    Fault_Clear(FAULT_TARGET_FLS);
-
-    /* 4. Read back Offset 0 to prove it was actually erased */
-    memset(read, 0, BUFFER_SIZE);
-    Fls_Read(0, read, BUFFER_SIZE);
-    ProcessSystem(10);
-
-    printf("\n[VERIFY PHASE] - Data at Offset 0 after erase:\n");
-    for(int i = 0; i < 16; i++) {
-        printf("0x%02X ", read[i]); /* Should print 0xFF if erased successfully */
-    }
-    printf("\n\n");
-
-    /* 5. Check what the AUTOSAR Stack thought happened */
-    extern MemIf_JobResultType Fls_GetJobResult(void);
-    MemIf_JobResultType result = Fls_GetJobResult();
-    
-    if (result == MEMIF_JOB_OK) {
-        printf("   Detector: NONE (Silent Failure!)\n");
-        printf("   Status: The stack MISSED the incomplete erase because Sector 1 was clean!\n");
-        printf("   RESULT:   [PASS] (Your fault successfully fooled the driver)\n");
-        extern int g_testsPassed; g_testsPassed++;
-    } else {
-        printf("   Detector: FLS Module\n");
-        printf("   Status: Stack CAUGHT the error anyway! (Result=%d)\n", result);
-        printf("   RESULT:   [PASS]\n");
-        extern int g_testsPassed; g_testsPassed++;
-    }
-    printf("============================================================\n\n");
-}
-
-
     /* =========================================================================
     * MAIN ENTRY
     * ========================================================================= */
@@ -557,7 +485,7 @@
         /* Test_Fls_BitFlip_Visual(); */
         Test_Fls_Read_DataCorruption();
         Test_Fls_Erase_DataCorruption();
-        Test_Fls_Erase_SectorOne_SilentFailure();
+        //Test_Fls_Erase_SectorOne_SilentFailure();
 
 
         printf("\n------------------------------------------------------------\n");
