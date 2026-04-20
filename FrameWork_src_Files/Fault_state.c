@@ -9,7 +9,7 @@ void FaultState_Init(void) {
     for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         Fault_Table[i].Active = FALSE;
         Fault_Table[i].running = FALSE;
-        Fault_Table[i].TargetModuleID = 0;
+        Fault_Table[i].TargetModuleServiceID = 0;
         Fault_Table[i].Type = FAULT_NONE;
         Fault_Table[i].current_start_time = 0;
     }
@@ -81,7 +81,7 @@ Std_ReturnType FaultState_Activate_fault(uint16_t moduleId, FaultType_t type, ui
 
     FaultConfig_t* fault = &Fault_Table[fault_Id];
     
-    fault->TargetModuleID = moduleId;
+    fault->TargetModuleServiceID = moduleId;
     fault->Type = type;
     fault->DurationMs = duration;
     
@@ -93,12 +93,12 @@ Std_ReturnType FaultState_Activate_fault(uint16_t moduleId, FaultType_t type, ui
     return E_OK;
 }
 
-boolean FaultState_IsActive(uint16_t moduleId, uint16_t fault_Id) {
+boolean FaultState_IsActive(uint16_t module_service_Id, uint16_t fault_Id) {
     if (fault_Id >= MAX_ACTIVE_FAULTS) {
         return FALSE;
     }
     
-    if ((Fault_Table[fault_Id].TargetModuleID == moduleId) && 
+    if ((Fault_Table[fault_Id].TargetModuleServiceID == module_service_Id) &&
         (Fault_Table[fault_Id].Active == TRUE)) {
         return TRUE;
     }
@@ -109,7 +109,7 @@ boolean FaultState_IsActive(uint16_t moduleId, uint16_t fault_Id) {
 void FaultState_Clear(uint16_t moduleId) {
     uint16_t i;
     for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if (Fault_Table[i].TargetModuleID == moduleId) {
+        if (Fault_Table[i].TargetModuleServiceID == moduleId) {
             Fault_Table[i].Type = FAULT_NONE;
             Fault_Table[i].Active = FALSE;
             Fault_Table[i].running = FALSE;
