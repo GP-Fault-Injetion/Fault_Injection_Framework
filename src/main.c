@@ -479,13 +479,18 @@
         printf("Type: PARAMETER_CORRUPTION \n");
         printf("Parameter: SourceAddressPtr (NULL pointer)\n\n");
 
+
         printf("[WRITE PHASE WITH NULL POINTER]\n");
         uint32 targetAddress = 0x100;
         uint32 length = 64;
-        
-        Std_ReturnType result = Fls_Write(targetAddress, (const uint8*)NULL, length);
 
-        printf(">>> Fls_Write(0x%X, NULL, %u) called\n\n", targetAddress, length);
+        /* Activate parameter corruption fault for FLS_WRITE */
+        Fault_Clear(TARGET_FLS_WRITE);
+        FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_PARAMETER_CORRUPTION, 0, 0);
+        Std_ReturnType result = Hook_Fls_Write(targetAddress, (const uint8*)NULL, length);
+        Fault_Clear(TARGET_FLS_WRITE);
+
+        printf(">>> Hook_Fls_Write(0x%X, NULL, %u) called\n\n", targetAddress, length);
 
         if (result == E_NOT_OK) {
             printf("   Status:   FLS correctly REJECTED the operation with E_NOT_OK\n");
@@ -513,13 +518,18 @@
         printf("Type: PARAMETER_CORRUPTION \n");
         printf("Parameter: TargetAddressPtr (NULL pointer)\n\n");
 
+
         printf("[READ PHASE WITH NULL POINTER]\n");
         uint32 sourceAddress = 0x100;
         uint32 length = 64;
-        
-        Std_ReturnType result = Fls_Read(sourceAddress, (uint8*)NULL, length);
 
-        printf(">>> Fls_Read(0x%X, NULL, %u) called\n\n", sourceAddress, length);
+        /* Activate parameter corruption fault for FLS_READ */
+        Fault_Clear(TARGET_FLS_READ);
+        FaultState_Activate_fault(TARGET_FLS_READ, FAULT_PARAMETER_CORRUPTION, 0, 0);
+        Std_ReturnType result = Hook_Fls_Read(sourceAddress, (uint8*)NULL, length);
+        Fault_Clear(TARGET_FLS_READ);
+
+        printf(">>> Hook_Fls_Read(0x%X, NULL, %u) called\n\n", sourceAddress, length);
 
         if (result == E_NOT_OK) {
             printf("   Status:   FLS correctly REJECTED the operation with E_NOT_OK\n");
@@ -535,6 +545,147 @@
             printf("   RESULT:   [FAIL]\n");
             printf("============================================================\n\n");
             g_testsFailed++;
+        }
+    }
+
+    void Test_Fls_Erase_ParameterCorruption_UnalignedAddress(void) {
+        printf("=== TEST 7: Fls_Erase Parameter Corruption (Unaligned Address) ===\n");
+        printf("   Goal: Call Fls_Erase with unaligned address. Verify FLS rejects request [FLS020].\n\n");
+
+        printf("[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS \n");
+        printf("Type: PARAMETER_CORRUPTION \n");
+        printf("Parameter: TargetAddress (unaligned, not on sector boundary)\n\n");
+
+        printf("[ERASE PHASE WITH UNALIGNED ADDRESS]\n");
+        uint32 unalignedAddress = 0x0001;  /* Not aligned to FLS_SECTOR_SIZE (1024) */
+        uint32 length = 1024;
+        
+        /* Activate parameter corruption fault for FLS_ERASE */
+        Fault_Clear(TARGET_FLS_ERASE);
+        FaultState_Activate_fault(TARGET_FLS_ERASE, FAULT_PARAMETER_CORRUPTION, 0, 0);
+        Std_ReturnType result = Hook_Fls_Erase(unalignedAddress, length);
+        Fault_Clear(TARGET_FLS_ERASE);
+
+        printf(">>> Hook_Fls_Erase(0x%X, %u) called\n\n", unalignedAddress, length);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   FLS correctly REJECTED the operation with E_NOT_OK\n");
+            printf("   Detector: FLS Module (Parameter Validation)\n");
+            printf("   [Requirement]: FLS020 - Address alignment check passed\n");
+            printf("   RESULT:   [PASS]\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   FLS did NOT reject the operation (returned %d instead of E_NOT_OK)\n", result);
+            printf("   Detector: Application (Parameter validation FAILED)\n");
+            printf("   [Requirement]: FLS020 - Address alignment check FAILED\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
+
+    void Test_Fls_Erase_ParameterCorruption_ZeroLength(void) {
+        printf("=== TEST 8: Fls_Erase Parameter Corruption (Zero Length) ===\n");
+        printf("   Goal: Call Fls_Erase with zero length. Verify FLS rejects request [FLS021].\n\n");
+
+        printf("[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS \n");
+        printf("Type: PARAMETER_CORRUPTION \n");
+        printf("Parameter: Length (zero bytes)\n\n");
+
+        printf("[ERASE PHASE WITH ZERO LENGTH]\n");
+        uint32 address = 0x0000;  /* Aligned */
+        uint32 zeroLength = 0;    /* Invalid: must be > 0 */
+        
+        Std_ReturnType result = Hook_Fls_Erase(address, zeroLength);
+
+        printf(">>> Hook_Fls_Erase(0x%X, %u) called\n\n", address, zeroLength);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   FLS correctly REJECTED the operation with E_NOT_OK\n");
+            printf("   Detector: FLS Module (Parameter Validation)\n");
+            printf("   [Requirement]: FLS021 - Length validation check passed\n");
+            printf("   RESULT:   [PASS]\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   FLS did NOT reject the operation (returned %d instead of E_NOT_OK)\n", result);
+            printf("   Detector: Application (Parameter validation FAILED)\n");
+            printf("   [Requirement]: FLS021 - Length validation check FAILED\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
+
+    void Test_Fls_Erase_ParameterCorruption_OutOfBounds(void) {
+        printf("=== TEST 9: Fls_Erase Parameter Corruption (Out-of-Bounds Address) ===\n");
+        printf("   Goal: Call Fls_Erase with aligned but out-of-bounds address. Verify FLS rejects request [FLS020].\n\n");
+
+        printf("[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS \n");
+        printf("Type: PARAMETER_CORRUPTION \n");
+        printf("Parameter: TargetAddress (aligned but exceeds flash size)\n\n");
+
+        printf("[ERASE PHASE WITH OUT-OF-BOUNDS ADDRESS]\n");
+        uint32 outOfBoundsAddress = 0x8000;  /* Exactly at/beyond FLASH_SIZE (32768 = 0x8000) */
+        uint32 length = 1024;
+        
+        Std_ReturnType result = Hook_Fls_Erase(outOfBoundsAddress, length);
+
+        printf(">>> Hook_Fls_Erase(0x%X, %u) called (FLASH_SIZE = 0x8000)\n\n", outOfBoundsAddress, length);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   FLS correctly REJECTED the operation with E_NOT_OK\n");
+            printf("   Detector: FLS Module (Boundary Check)\n");
+            printf("   [Requirement]: FLS020 - Address boundary validation passed\n");
+            printf("   RESULT:   [PASS]\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   FLS did NOT reject the operation (returned %d instead of E_NOT_OK)\n", result);
+            printf("   Detector: Application (Boundary validation FAILED)\n");
+            printf("   [Requirement]: FLS020 - Address boundary validation FAILED\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
+
+    void Test_Fls_Erase_ParameterCorruption_NonAlignedLength(void) {
+        printf("=== TEST 10: Fls_Erase Parameter Corruption (Non-Aligned Length) ===\n");
+        printf("   Goal: Call Fls_Erase with length not multiple of sector size. Verify rounding behavior [FLS221].\n\n");
+
+        printf("[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS \n");
+        printf("Type: PARAMETER_CORRUPTION \n");
+        printf("Parameter: Length (512 bytes, not aligned to sector size of 1024)\n\n");
+
+        printf("[ERASE PHASE WITH NON-ALIGNED LENGTH]\n");
+        uint32 address = 0x0000;        /* Aligned address */
+        uint32 nonAlignedLength = 512;  /* Not a multiple of FLS_SECTOR_SIZE (1024) */
+        
+        Std_ReturnType result = Hook_Fls_Erase(address, nonAlignedLength);
+
+        printf(">>> Hook_Fls_Erase(0x%X, %u) called (FLS_SECTOR_SIZE = 1024)\n\n", address, nonAlignedLength);
+
+        if (result == E_OK) {
+            printf("   Status:   FLS accepted the operation with E_OK\n");
+            printf("   Detector: FLS Module (Rounding behavior [FLS221])\n");
+            printf("   [Requirement]: FLS221 - Length rounded up to next sector boundary (512 -> 1024)\n");
+            printf("   RESULT:   [PASS]\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   FLS REJECTED the operation (returned %d)\n", result);
+            printf("   Detector: Application (Strict validation - does not round)\n");
+            printf("   [Requirement]: FLS221 - Driver implementation may require strict alignment\n");
+            printf("   NOTE:     Depends on MCAL implementation interpretation\n");
+            printf("   RESULT:   [CONDITIONAL]\n");
+            printf("============================================================\n\n");
+            /* We don't count this as pass/fail since it depends on implementation */
         }
     }
     
@@ -559,6 +710,10 @@
         Test_Fls_Erase_DataCorruption();
         Test_Fls_Write_ParameterCorruption_NullPointer();
         Test_Fls_Read_ParameterCorruption_NullPointer();
+        Test_Fls_Erase_ParameterCorruption_UnalignedAddress();
+        Test_Fls_Erase_ParameterCorruption_ZeroLength();
+        Test_Fls_Erase_ParameterCorruption_OutOfBounds();
+        Test_Fls_Erase_ParameterCorruption_NonAlignedLength();
         //Test_Fls_Erase_SectorOne_SilentFailure();
 
 

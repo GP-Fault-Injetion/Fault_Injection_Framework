@@ -76,52 +76,51 @@ Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPt
     
     uint8 tempBuffer[512]; 
     uint32 actualLen = (Length > 512) ? 512 : Length;
-    uint8* dataPtr = NULL;
-    uint32 dataLen = Length;
-    uint32 targetAddr = TargetAddress;
-    uint32 paramCorruptionActive = 0;
-
-    /* --- CHECK FOR PARAMETER CORRUPTION --- */
     uint16_t i;
+
+    /* --- CHECK FOR PARAMETER CORRUPTION FIRST --- */
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
              FaultConfig_t* cfg = FaultState_GetConfig(i);
              if (cfg->Type == FAULT_PARAMETER_CORRUPTION) {
-                 paramCorruptionActive = 1;
-                 /* Corrupt a parameter: Set Data Pointer to NULL to test [FLS157] */
-                 dataPtr = NULL_PTR;
                  printf("[TEST] Corrupted Fls_Write parameter: SourceAddressPtr -> NULL\n");
                  /* Call with NULL pointer - FLS should reject it */
-                 return Fls_Write(targetAddr, dataPtr, dataLen);
+                 return Fls_Write(TargetAddress, NULL_PTR, Length);
              }
         }
     }
 
-    /* --- NO PARAMETER CORRUPTION - Normal data injection flow --- */
-    if (paramCorruptionActive == 0 && SourceAddressPtr != NULL) {
+    /* --- NO PARAMETER CORRUPTION - Check for data corruption --- */
+    if (SourceAddressPtr != NULL) {
         memcpy(tempBuffer, SourceAddressPtr, actualLen);
-
+        
+        boolean hasDataFault = FALSE;
         for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
             if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
-                 
-                 /* SMART FILTERING: Check for Magic Number */
-                 if (IsFeeHeader(SourceAddressPtr, actualLen) == FALSE) {
-                     
-                     /* Double Check: Only inject if size looks like Data (>= 32) */
-                     if (Length >= 32) {
-                         FaultConfig_t* cfg = FaultState_GetConfig(i);
-                         // printf("[Hook] Injecting FLS Fault on Data (Len=%d)\n", Length);
-                         Fault_Inject(tempBuffer, actualLen, cfg);
+                 FaultConfig_t* cfg = FaultState_GetConfig(i);
+                 if (cfg->Type != FAULT_PARAMETER_CORRUPTION) {
+                     /* SMART FILTERING: Check for Magic Number */
+                     if (IsFeeHeader(SourceAddressPtr, actualLen) == FALSE) {
+                         /* Double Check: Only inject if size looks like Data (>= 32) */
+                         if (Length >= 32) {
+                             Fault_Inject(tempBuffer, actualLen, cfg);
+                             hasDataFault = TRUE;
+                         }
                      }
-                 } else {
-                     // printf("[Hook] Fee Header Detected. Skipping.\n");
                  }
             }
         }
-        return Fls_Write(TargetAddress, tempBuffer, actualLen);
+        
+        /* Call with original or modified buffer */
+        if (hasDataFault) {
+            return Fls_Write(TargetAddress, tempBuffer, actualLen);
+        } else {
+            return Fls_Write(TargetAddress, SourceAddressPtr, Length);
+        }
+    } else {
+        /* SourceAddressPtr is NULL - call real function to validate */
+        return Fls_Write(TargetAddress, SourceAddressPtr, Length);
     }
-
-    return E_OK;
 }
 
 /* --- FLS READ HOOK IMPLEMENTATION --- */
@@ -170,6 +169,21 @@ Std_ReturnType Hook_Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint
 Std_ReturnType Hook_Fls_Erase(uint32 TargetAddress, uint32 Length) {
     
     uint16_t i;
+    
+    /* --- CHECK FOR PARAMETER CORRUPTION FIRST --- */
+    for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if (FaultState_IsActive(TARGET_FLS_ERASE, i) == TRUE) {
+            FaultConfig_t* cfg = FaultState_GetConfig(i);
+            if (cfg->Type == FAULT_PARAMETER_CORRUPTION) {
+                /* Corrupt address alignment [FLS020] */
+                printf("[TEST] Corrupted Fls_Erase parameter: TargetAddress -> Unaligned (0x%X)\n", TargetAddress);
+                uint32 unalignedAddr = TargetAddress + 1;  /* Make it unaligned */
+                return Fls_Erase(unalignedAddr, Length);
+            }
+        }
+    }
+
+    /* --- NO PARAMETER CORRUPTION - Check for length corruption or normal erase --- */
     boolean faultActive = FALSE;
 
     /* Check if any FLS fault is active */
@@ -190,7 +204,7 @@ Std_ReturnType Hook_Fls_Erase(uint32 TargetAddress, uint32 Length) {
                  limitedLength = cfg->MaxEraseBytes;
              }
              return Fls_Erase(TargetAddress, limitedLength);
-        } else {
+        } else if (cfg->Type != FAULT_PARAMETER_CORRUPTION) {
             /* Fallback to original simulation: erase all but leave 1 dirty byte */
             Std_ReturnType res = Fls_Erase(TargetAddress, Length);
             VirtualFlashMemory[TargetAddress] = 0x00; 

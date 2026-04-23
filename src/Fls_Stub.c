@@ -22,6 +22,16 @@ void Fls_Init(const void* ConfigPtr) {
 }
 
 Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length) {
+    /* FLS020: Check if start address is aligned to a sector boundary */
+    if ((TargetAddress % FLS_SECTOR_SIZE) != 0) {
+        return E_NOT_OK;  /* Address not aligned */
+    }
+
+    /* FLS021: Check if length > 0 and end address will be aligned to sector boundary */
+    if (Length == 0) {
+        return E_NOT_OK;  /* Length is zero */
+    }
+
     /* Round up to the nearest sector boundary */
     uint32 roundedLength = ((Length + FLS_SECTOR_SIZE - 1) / FLS_SECTOR_SIZE) * FLS_SECTOR_SIZE;
 
@@ -39,30 +49,28 @@ Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length) {
     return E_OK;
 }
 
+
 Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length) {
     /* FLS157: Check for null data pointer */
-    if (SourceAddressPtr == NULL_PTR) {
+    if (SourceAddressPtr == NULL_PTR || SourceAddressPtr == NULL) {
         return E_NOT_OK;
     }
-    
     if ((TargetAddress + Length) > FLASH_SIZE) return E_NOT_OK;
     memcpy(&VirtualFlashMemory[TargetAddress], SourceAddressPtr, Length);
-    
     IsEraseJobPending = FALSE;
     Fls_JobResult = MEMIF_JOB_PENDING;
     FlsJobReady = FALSE;
     return E_OK;
 }
 
+
 Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length) {
     /* FLS158: Check for null data pointer */
-    if (TargetAddressPtr == NULL) {
+    if (TargetAddressPtr == NULL_PTR || TargetAddressPtr == NULL) {
         return E_NOT_OK;
     }
-    
     if ((SourceAddress + Length) > FLASH_SIZE) return E_NOT_OK;
     memcpy(TargetAddressPtr, &VirtualFlashMemory[SourceAddress], Length);
-    
     IsEraseJobPending = FALSE;
     Fls_JobResult = MEMIF_JOB_PENDING;
     FlsJobReady = FALSE;
