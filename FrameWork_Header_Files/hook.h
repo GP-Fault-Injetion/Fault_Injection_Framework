@@ -14,6 +14,7 @@ Std_ReturnType Hook_NvM_WriteBlock(NvM_BlockIdType blockId, const void *NvM_SrcP
 Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length);
 Std_ReturnType Hook_Fee_Write(uint16 blockNumber, uint8* dataBufferPtr);
 
+
 #ifndef NVM_INTERNAL_BUILD
 #define NvM_WriteBlock Hook_NvM_WriteBlock
 #define NvM_ReadBlock  Hook_NvM_ReadBlock
@@ -23,6 +24,7 @@ Std_ReturnType Hook_Fee_Write(uint16 blockNumber, uint8* dataBufferPtr);
 
 #ifndef FEE_INTERNAL_BUILD
 #define Fee_Write      Hook_Fee_Write
+
 #endif
 
 

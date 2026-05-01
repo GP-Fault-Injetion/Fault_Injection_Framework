@@ -25,13 +25,29 @@
 //fee
 #undef Fee_Write
 
+
 extern Std_ReturnType NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr );	
 extern Std_ReturnType NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_SrcPtr );	
 extern Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length);
 extern Std_ReturnType Fee_Write(uint16 blockNumber, uint8* dataBufferPtr);
 
+
 extern const NvM_ConfigType NvM_Config;
 extern FaultConfig_t* FaultState_GetConfig(uint16_t fault_Id);
+
+//Helper to print hte buffer 
+void PrintBuffer2(const char* label, uint8* buf, uint8* reference) {
+    printf("%s:\n", label);
+    for(int i = 0; i < 66; i++) {   // print first 66 bytes only
+        if (reference != NULL && buf[i] != reference[i]) {
+            printf("[0x%02X] ", buf[i]);  // Corrupted byte in brackets
+        } else {
+            printf("0x%02X ", buf[i]);     // Normal byte
+        }
+    }
+    printf("\n");
+}
+
 
 /* --- HELPER: NvM Length Lookup --- */
 static uint32_t GetNvMBlockLength(NvM_BlockIdType blockId) {
@@ -67,7 +83,7 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
     uint8* mutableDataPtr = (uint8*)NvM_SrcPtr; 
     
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_NVM_WRITE_BLOCK, i) == TRUE) {
             FaultConfig_t* cfg = FaultState_GetConfig(i);
             uint32_t dataLength = GetNvMBlockLength(blockId);
             if(dataLength > 0) {
@@ -88,12 +104,14 @@ Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPt
     
     uint8 tempBuffer[512]; 
     uint32 actualLen = (Length > 512) ? 512 : Length;
+    
 
     memcpy(tempBuffer, SourceAddressPtr, actualLen);
+    
 
     uint16_t i;
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_FLS, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
             
              /* SMART FILTERING: Check for Magic Number */
             if (IsFeeHeader(SourceAddressPtr, actualLen) == FALSE) {
@@ -132,18 +150,38 @@ Std_ReturnType Hook_Fee_Write(uint16 blockNumber, uint8* dataBufferPtr) {
     uint32 dataLength = GetFeeBlockLength(blockNumber);
     uint16 i;
 
-    printf("[Hook] Fee_Write Intercepted for Block*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*/*// %u\n", blockNumber);
+    
+    PrintBuffer2("FEE Write Data", dataBufferPtr, NULL);
 
     if ((dataBufferPtr == NULL) || (dataLength == 0)) {
         return Fee_Write(blockNumber, dataBufferPtr);
     }
 
     for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if (FaultState_IsActive(FAULT_TARGET_FEE, i) == TRUE) {
+        if (FaultState_IsActive(TARGET_FEE_WRITE, i) == TRUE) {
             FaultConfig_t* cfg = FaultState_GetConfig(i);
-            Fault_Inject(dataBufferPtr, dataLength, cfg);
+            if(cfg->Type==FAULT_BIT_FLIP || cfg->Type==FAULT_MULTI_BIT_FLIP||
+                cfg->Type==FAULT_STUCK_AT_0 || cfg->Type==FAULT_STUCK_AT_1|| 
+                cfg->Type==FAULT_DATA_CORRUPTION ||
+                cfg->Type==FAULT_CRC_DATA_CORRUPTION) {
+            
+                Fault_Inject(dataBufferPtr, dataLength, cfg);
+            }
+
+            else if (cfg->Type == FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION) {
+                printf("/*/*/*/*/*/*/*/*/*/[Hook] FRR Write called and i will return wrong value*/*/*/*/*/*/*/\n");
+            Std_ReturnType ret = Fee_Write(blockNumber, dataBufferPtr);
+            return (ret == E_OK) ? E_NOT_OK : E_OK;
+            
+            }
+            else if(cfg->Type == FAULT_RETURN_VALUE_REJECTION) {
+                printf("/*/*/*/*/*/*/*/*/*/[Hook] FRR Write didn't call and returned E_NOT_OK*/*/*/*/*/*/*/\n");
+                return E_NOT_OK; 
+            }
         }
     }
 
     return Fee_Write(blockNumber, dataBufferPtr);
 }
+
+
