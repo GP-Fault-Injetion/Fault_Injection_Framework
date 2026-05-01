@@ -73,10 +73,11 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
 
 /* --- FLS WRITE HOOK IMPLEMENTATION --- */
 Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length) {
-    
+    printf("Fls_Write_hook eeeeeeeeeeeeeeeeee\n");
     uint8 tempBuffer[512]; 
     uint32 actualLen = (Length > 512) ? 512 : Length;
     uint16_t i;
+    Std_ReturnType result;
 
     /* --- CHECK FOR PARAMETER CORRUPTION FIRST --- */
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
@@ -98,7 +99,7 @@ Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPt
         for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
             if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
                  FaultConfig_t* cfg = FaultState_GetConfig(i);
-                 if (cfg->Type != FAULT_PARAMETER_CORRUPTION) {
+                 if (cfg->Type != FAULT_PARAMETER_CORRUPTION && cfg->Type != FAULT_RETURN_VALUE_CORRUPTION) {
                      /* SMART FILTERING: Check for Magic Number */
                      if (IsFeeHeader(SourceAddressPtr, actualLen) == FALSE) {
                          /* Double Check: Only inject if size looks like Data (>= 32) */
@@ -113,14 +114,29 @@ Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPt
         
         /* Call with original or modified buffer */
         if (hasDataFault) {
-            return Fls_Write(TargetAddress, tempBuffer, actualLen);
+            result = Fls_Write(TargetAddress, tempBuffer, actualLen);
         } else {
-            return Fls_Write(TargetAddress, SourceAddressPtr, Length);
+            result = Fls_Write(TargetAddress, SourceAddressPtr, Length);
         }
     } else {
         /* SourceAddressPtr is NULL - call real function to validate */
-        return Fls_Write(TargetAddress, SourceAddressPtr, Length);
+        result = Fls_Write(TargetAddress, SourceAddressPtr, Length);
     }
+
+    /* --- CHECK FOR RETURN VALUE CORRUPTION --- */
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             if (cfg->Type == FAULT_RETURN_VALUE_CORRUPTION) {
+                 /* Corrupt the return value by flipping it */
+                 printf("[TEST] Corrupted Fls_Write return value: 0x%02X -> ", result);
+                 result = (result == E_OK) ? E_NOT_OK : E_OK;
+                 printf("0x%02X\n", result);
+             }
+        }
+    }
+
+    return result;
 }
 
 /* --- FLS READ HOOK IMPLEMENTATION --- */
@@ -151,14 +167,32 @@ Std_ReturnType Hook_Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint
     /* Step 2: If a FLS fault is active, corrupt the read-back data */
     for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if (FaultState_IsActive(TARGET_FLS_READ, i) == TRUE) {
+            FaultConfig_t* cfg = FaultState_GetConfig(i);
+            
+            if (cfg->Type == FAULT_RETURN_VALUE_CORRUPTION) {
+                /* Skip return value corruption at this stage, handle it at the end */
+                continue;
+            }
 
             /* Skip Fee headers — only corrupt user data */
             if (IsFeeHeader(TargetAddressPtr, Length) == FALSE) {
                 if (Length >= 32) {
-                    FaultConfig_t* cfg = FaultState_GetConfig(i);
                     Fault_Inject(TargetAddressPtr, Length, cfg);
                 }
             }
+        }
+    }
+
+    /* Step 3: Check for return value corruption after data injection */
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(TARGET_FLS_READ, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             if (cfg->Type == FAULT_RETURN_VALUE_CORRUPTION) {
+                 /* Corrupt the return value by flipping it */
+                 printf("[TEST] Corrupted Fls_Read return value: 0x%02X -> ", result);
+                 result = (result == E_OK) ? E_NOT_OK : E_OK;
+                 printf("0x%02X\n", result);
+             }
         }
     }
 
@@ -169,6 +203,7 @@ Std_ReturnType Hook_Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint
 Std_ReturnType Hook_Fls_Erase(uint32 TargetAddress, uint32 Length) {
     
     uint16_t i;
+    Std_ReturnType result;
     
     /* --- CHECK FOR PARAMETER CORRUPTION FIRST --- */
     for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
@@ -185,33 +220,53 @@ Std_ReturnType Hook_Fls_Erase(uint32 TargetAddress, uint32 Length) {
 
     /* --- NO PARAMETER CORRUPTION - Check for length corruption or normal erase --- */
     boolean faultActive = FALSE;
+    FaultConfig_t* activeFaultCfg = NULL;
 
     /* Check if any FLS fault is active */
     for (i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if (FaultState_IsActive(TARGET_FLS_ERASE, i) == TRUE) {
             faultActive = TRUE;
+            activeFaultCfg = FaultState_GetConfig(i);
             break;
         }
     }
 
-    if (faultActive == TRUE) {
-        FaultConfig_t* cfg = FaultState_GetConfig(i);
+    if (faultActive == TRUE && activeFaultCfg != NULL) {
         
-        if (cfg->Type == FAULT_PARTIAL_ERASE) {
+        if (activeFaultCfg->Type == FAULT_PARTIAL_ERASE) {
              /* User's logic: Limit the erase length */
              uint32 limitedLength = Length;
-             if (cfg->MaxEraseBytes < Length) {
-                 limitedLength = cfg->MaxEraseBytes;
+             if (activeFaultCfg->MaxEraseBytes < Length) {
+                 limitedLength = activeFaultCfg->MaxEraseBytes;
              }
-             return Fls_Erase(TargetAddress, limitedLength);
-        } else if (cfg->Type != FAULT_PARAMETER_CORRUPTION) {
+             result = Fls_Erase(TargetAddress, limitedLength);
+        } else if (activeFaultCfg->Type == FAULT_RETURN_VALUE_CORRUPTION) {
+            /* For return value corruption, execute normally first */
+            result = Fls_Erase(TargetAddress, Length);
+        } else if (activeFaultCfg->Type != FAULT_PARAMETER_CORRUPTION) {
             /* Fallback to original simulation: erase all but leave 1 dirty byte */
-            Std_ReturnType res = Fls_Erase(TargetAddress, Length);
+            result = Fls_Erase(TargetAddress, Length);
             VirtualFlashMemory[TargetAddress] = 0x00; 
-            return res;
+        } else {
+            result = Fls_Erase(TargetAddress, Length);
+        }
+    } else {
+        /* No fault active — normal erase */
+        result = Fls_Erase(TargetAddress, Length);
+    }
+
+    /* --- CHECK FOR RETURN VALUE CORRUPTION --- */
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(TARGET_FLS_ERASE, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             if (cfg->Type == FAULT_RETURN_VALUE_CORRUPTION) {
+                 /* Corrupt the return value by flipping it */
+                 printf("[TEST] Corrupted Fls_Erase return value: 0x%02X -> ", result);
+                 result = (result == E_OK) ? E_NOT_OK : E_OK;
+                 printf("0x%02X\n", result);
+             }
         }
     }
 
-    /* No fault active — normal erase */
-    return Fls_Erase(TargetAddress, Length);
+    return result;
 }

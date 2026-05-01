@@ -690,6 +690,160 @@
     }
     
     /* =========================================================================
+    * RETURN VALUE CORRUPTION TESTS
+    * ========================================================================= */
+
+    void Test_Fls_Write_ReturnValueCorruption(void) {
+        printf("=== TEST 11: Fls_Write Return Value Corruption ===\n");
+        printf("   Goal: Inject return value corruption. E_OK becomes E_NOT_OK. Verify behavior.\n\n");
+
+        //extern Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length);
+        
+        uint8 testData[64];
+        memset(testData, 0xAA, 64);
+
+        printf("[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS_WRITE \n");
+        printf("Type: RETURN_VALUE_CORRUPTION \n");
+        printf("Return Value: E_OK (0x00) -> E_NOT_OK (0x01)\n\n");
+
+        /* Activate return value corruption fault for FLS_WRITE */
+        Fault_Clear(TARGET_FLS_WRITE);
+        FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_RETURN_VALUE_CORRUPTION, 500, 0);
+        FaultConfig_t* cfg = FaultState_GetConfig(0);
+        cfg->Start_TimeMs = GetSystemTimeMs();
+        cfg->End_timeMs   = cfg->Start_TimeMs + 500;
+
+        ProcessSystem(5);
+
+        printf("[WRITE PHASE]\n");
+        printf(">>> Hook_Fls_Write(0x1000, testData, 64) with corrupted return value\n");
+        printf("[TEST] Corrupted Fls_Write return value: 0x00 -> 0x01\n\n");
+        Std_ReturnType result = Fls_Write(0x1000, testData, 64);
+        
+        Fault_Clear(TARGET_FLS_WRITE);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   Return value correctly corrupted: E_OK -> E_NOT_OK\n");
+            printf("   Detector: Application (Caller receives unexpected E_NOT_OK)\n");
+            printf("   Impact:   Application may treat successful write as failed\n");
+            printf("   RESULT:   [PASS] - Corruption detected by caller\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   Return value corruption FAILED (got 0x%02X instead of 0x01)\n", result);
+            printf("   Detector: Application\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
+
+    void Test_Fls_Read_ReturnValueCorruption(void) {
+        printf("=== TEST 12: Fls_Read Return Value Corruption ===\n");
+        printf("   Goal: Inject return value corruption on Fls_Read. E_OK becomes E_NOT_OK.\n\n");
+
+        extern Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length);
+        
+        uint8 testData[64];
+        memset(testData, 0x00, 64);
+
+        printf("[WRITE PHASE] - Writing clean data to flash...\n");
+        Fault_Clear(TARGET_FLS_WRITE);
+        Hook_Fls_Write(0x2000, testData, 64);
+
+        printf("\n[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS_READ \n");
+        printf("Type: RETURN_VALUE_CORRUPTION \n");
+        printf("Return Value: E_OK (0x00) -> E_NOT_OK (0x01)\n\n");
+
+        /* Activate return value corruption fault for FLS_READ */
+        Fault_Clear(TARGET_FLS_READ);
+        FaultState_Activate_fault(TARGET_FLS_READ, FAULT_RETURN_VALUE_CORRUPTION, 500, 0);
+        FaultConfig_t* cfg = FaultState_GetConfig(0);
+        cfg->Start_TimeMs = GetSystemTimeMs();
+        cfg->End_timeMs   = cfg->Start_TimeMs + 500;
+
+        ProcessSystem(5);
+
+        printf("[READ PHASE]\n");
+        uint8 readBuffer[64];
+        memset(readBuffer, 0xFF, 64);
+        printf(">>> Hook_Fls_Read(0x2000, readBuffer, 64) with corrupted return value\n");
+        printf("[TEST] Corrupted Fls_Read return value: 0x00 -> 0x01\n\n");
+        Std_ReturnType result = Hook_Fls_Read(0x2000, readBuffer, 64);
+        
+        Fault_Clear(TARGET_FLS_READ);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   Return value correctly corrupted: E_OK -> E_NOT_OK\n");
+            printf("   Detector: Application (Caller receives unexpected E_NOT_OK)\n");
+            printf("   Data Status: Buffer contains valid data despite corrupted return\n");
+            printf("   Impact:   Application will retry or report read failure\n");
+            printf("   RESULT:   [PASS] - Corruption detected by caller\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   Return value corruption FAILED (got 0x%02X instead of 0x01)\n", result);
+            printf("   Detector: Application\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
+
+    void Test_Fls_Erase_ReturnValueCorruption(void) {
+        printf("=== TEST 13: Fls_Erase Return Value Corruption ===\n");
+        printf("   Goal: Inject return value corruption on Fls_Erase. E_OK becomes E_NOT_OK.\n\n");
+
+        extern Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length);
+        
+        printf("[PREPARATION PHASE]\n");
+        printf("Writing test pattern to flash at address 0x3000...\n");
+        uint8 testData[64];
+        memset(testData, 0x55, 64);
+        Fault_Clear(TARGET_FLS_WRITE);
+        Hook_Fls_Write(0x3000, testData, 64);
+
+        printf("\n[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FLS_ERASE \n");
+        printf("Type: RETURN_VALUE_CORRUPTION \n");
+        printf("Return Value: E_OK (0x00) -> E_NOT_OK (0x01)\n\n");
+
+        /* Activate return value corruption fault for FLS_ERASE */
+        Fault_Clear(TARGET_FLS_ERASE);
+        FaultState_Activate_fault(TARGET_FLS_ERASE, FAULT_RETURN_VALUE_CORRUPTION, 500, 0);
+        FaultConfig_t* cfg = FaultState_GetConfig(0);
+        cfg->Start_TimeMs = GetSystemTimeMs();
+        cfg->End_timeMs   = cfg->Start_TimeMs + 500;
+
+        ProcessSystem(5);
+
+        printf("[ERASE PHASE]\n");
+        printf(">>> Hook_Fls_Erase(0x3000, 1024) with corrupted return value\n");
+        printf("[TEST] Corrupted Fls_Erase return value: 0x00 -> 0x01\n\n");
+        Std_ReturnType result = Hook_Fls_Erase(0x3000, 1024);
+        
+        Fault_Clear(TARGET_FLS_ERASE);
+
+        if (result == E_NOT_OK) {
+            printf("   Status:   Return value correctly corrupted: E_OK -> E_NOT_OK\n");
+            printf("   Detector: Application (Caller receives unexpected E_NOT_OK)\n");
+            printf("   Erase Status: Erase operation may have completed despite error return\n");
+            printf("   Impact:   Application will think erase failed and may retry\n");
+            printf("   RESULT:   [PASS] - Corruption detected by caller\n");
+            printf("============================================================\n\n");
+            g_testsPassed++;
+        } else {
+            printf("   Status:   Return value corruption FAILED (got 0x%02X instead of 0x01)\n", result);
+            printf("   Detector: Application\n");
+            printf("   RESULT:   [FAIL]\n");
+            printf("============================================================\n\n");
+            g_testsFailed++;
+        }
+    }
+
+    /* =========================================================================
     * MAIN ENTRY
     * ========================================================================= */
     int main(void) {
@@ -714,6 +868,9 @@
         Test_Fls_Erase_ParameterCorruption_ZeroLength();
         Test_Fls_Erase_ParameterCorruption_OutOfBounds();
         Test_Fls_Erase_ParameterCorruption_NonAlignedLength();
+        Test_Fls_Write_ReturnValueCorruption();
+        Test_Fls_Read_ReturnValueCorruption();
+        Test_Fls_Erase_ReturnValueCorruption();
         //Test_Fls_Erase_SectorOne_SilentFailure();
 
 

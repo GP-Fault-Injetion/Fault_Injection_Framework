@@ -52,6 +52,7 @@ Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length) {
 
 Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length) {
     /* FLS157: Check for null data pointer */
+    printf("Fls_Write eeeeeeeeeeeeeeeeee\n");
     if (SourceAddressPtr == NULL_PTR || SourceAddressPtr == NULL) {
         return E_NOT_OK;
     }
@@ -60,6 +61,7 @@ Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, ui
     IsEraseJobPending = FALSE;
     Fls_JobResult = MEMIF_JOB_PENDING;
     FlsJobReady = FALSE;
+    
     return E_OK;
 }
 
