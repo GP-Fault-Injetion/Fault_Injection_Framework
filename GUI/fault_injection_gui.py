@@ -29,15 +29,19 @@ MAX_TEST_CASES      = 20
 MAX_FAULTS_PER_TEST = 10
 
 FAULT_TYPES = {
-    0: "NONE",
-    1: "BIT_FLIP",
-    2: "MULTI_BIT_FLIP",
-    3: "STUCK_AT_0",
-    4: "STUCK_AT_1",
-    5: "DELAY",
-    6: "OMISSION",
-    7: "DATA_CORRUPTION",
-    8: "CRC_CORRUPTION",
+    0:  "NONE",
+    1:  "BIT_FLIP",
+    2:  "MULTI_BIT_FLIP",
+    3:  "STUCK_AT_0",
+    4:  "STUCK_AT_1",
+    5:  "DELAY",
+    6:  "OMISSION",
+    7:  "DATA_CORRUPTION",
+    8:  "CRC_CORRUPTION",
+    9:  "RETURN_VALUE_CORRUPTION",
+    10: "PARAMETER_CORRUPTION",
+    11: "QUEUE_OVERFLOW",
+    12: "PARTIAL_ERASE",
 }
 
 TARGET_MODULES = {
@@ -56,9 +60,59 @@ EXPECTED_RESULTS = {
 }
 
 # Fault types that use BitPosition
-BITPOS_TYPES  = {1, 3, 4}   # BIT_FLIP, STUCK_AT_0, STUCK_AT_1
-MASK_TYPES    = {2}          # MULTI_BIT_FLIP uses Mask byte
-NEITHER_TYPES = {0, 5, 6, 7, 8}
+BITPOS_TYPES        = {1, 3, 4}         # BIT_FLIP, STUCK_AT_0, STUCK_AT_1
+MASK_TYPES          = {2}               # MULTI_BIT_FLIP uses Mask byte
+PARTIAL_ERASE_TYPES = {12}              # PARTIAL_ERASE uses MaxEraseBytes
+NEITHER_TYPES       = {0, 5, 6, 7, 8, 9, 10, 11}
+
+# Service IDs per module, keyed by module ID → {combined_id: display_name}
+# Format: combined = 0x[ModuleID_Hex][ServiceID_Hex]  (matches FaultInjection_Types.h)
+SERVICE_IDS = {
+    20: {   # NvM
+        0x1400: "NVM_INIT",
+        0x1401: "NVM_SET_DATA_INDEX",
+        0x1404: "NVM_GET_ERROR_STATUS",
+        0x1406: "NVM_READ_BLOCK",
+        0x1407: "NVM_WRITE_BLOCK",
+        0x140C: "NVM_READ_ALL",
+        0x140D: "NVM_WRITE_ALL",
+        0x140F: "NVM_INVALIDATE_NV_BLOCK",
+        0x1410: "NVM_ERASE_NV_BLOCK",
+        0x1411: "NVM_MAIN_FUNCTION",
+    },
+    21: {   # Fee
+        0x1500: "FEE_INIT",
+        0x1502: "FEE_READ",
+        0x1503: "FEE_WRITE",
+        0x1505: "FEE_GET_STATUS",
+        0x1506: "FEE_GET_JOB_RESULT",
+        0x1507: "FEE_INVALIDATE_BLOCK",
+        0x1512: "FEE_MAIN_FUNCTION",
+    },
+    22: {   # MemIf
+        0x1602: "MEMIF_READ",
+        0x1603: "MEMIF_WRITE",
+        0x1605: "MEMIF_GET_STATUS",
+        0x1606: "MEMIF_GET_JOB_RESULT",
+        0x1607: "MEMIF_INVALIDATE_BLOCK",
+        0x1608: "MEMIF_ERASE_IMM_BLOCK",
+    },
+    92: {   # Fls
+        0x5C00: "FLS_INIT",
+        0x5C01: "FLS_ERASE",
+        0x5C02: "FLS_WRITE",
+        0x5C03: "FLS_READ",
+        0x5C05: "FLS_GET_STATUS",
+        0x5C06: "FLS_GET_JOB_RESULT",
+        0x5CFF: "FLS_MAIN_FUNCTION",
+    },
+    90:  {},   # Eep  — no service IDs defined in project
+    212: {},   # EA   — no service IDs defined in project
+}
+
+def service_id_label(combined_id: int) -> str:
+    module_id = (combined_id >> 8) & 0xFF
+    return SERVICE_IDS.get(module_id, {}).get(combined_id, f"0x{combined_id:04X}")
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 FAULT_JSON    = os.path.join(SCRIPT_DIR, "fault_config.json")
@@ -585,7 +639,11 @@ class FaultDialog(QDialog):
         self.module_cb = QComboBox()
         for mid, name in TARGET_MODULES.items():
             self.module_cb.addItem(name, mid)
+        self.module_cb.currentIndexChanged.connect(self._update_service_ids)
         target_form.addRow("Target Module:", self.module_cb)
+
+        self.service_cb = QComboBox()
+        target_form.addRow("Service ID Target:", self.service_cb)
 
         self.type_cb = QComboBox()
         for ftype, name in FAULT_TYPES.items():
@@ -604,6 +662,15 @@ class FaultDialog(QDialog):
         self.mask_edit = QLineEdit("0xFF")
         self.mask_edit.setPlaceholderText("0x00–0xFF")
         target_form.addRow(self.mask_row_lbl, self.mask_edit)
+
+        # MaxEraseBytes row (partial erase)
+        self.max_erase_row_lbl = QLabel("Max Erase Bytes:")
+        self.max_erase_spin = QSpinBox()
+        self.max_erase_spin.setRange(1, 65535)
+        self.max_erase_spin.setValue(512)
+        target_form.addRow(self.max_erase_row_lbl, self.max_erase_spin)
+
+        self._update_service_ids()
 
         main_layout.addWidget(target_grp)
 
@@ -647,14 +714,29 @@ class FaultDialog(QDialog):
         btn_row.addWidget(ok_btn)
         main_layout.addLayout(btn_row)
 
+    def _update_service_ids(self):
+        mid = self.module_cb.currentData()
+        self.service_cb.blockSignals(True)
+        self.service_cb.clear()
+        sids = SERVICE_IDS.get(mid, {})
+        if sids:
+            for combined, name in sids.items():
+                self.service_cb.addItem(f"{name}  (0x{combined:04X})", combined)
+        else:
+            self.service_cb.addItem("ALL  (0x0000)", 0x0000)
+        self.service_cb.blockSignals(False)
+
     def _update_bit_fields(self):
         ft = self.type_cb.currentData()
-        show_bit  = ft in BITPOS_TYPES
-        show_mask = ft in MASK_TYPES
+        show_bit   = ft in BITPOS_TYPES
+        show_mask  = ft in MASK_TYPES
+        show_erase = ft in PARTIAL_ERASE_TYPES
         self.bitpos_row_lbl.setVisible(show_bit)
         self.bitpos_spin.setVisible(show_bit)
         self.mask_row_lbl.setVisible(show_mask)
         self.mask_edit.setVisible(show_mask)
+        self.max_erase_row_lbl.setVisible(show_erase)
+        self.max_erase_spin.setVisible(show_erase)
 
     def _recalc_end(self):
         end = self.start_spin.value() + self.dur_spin.value()
@@ -666,7 +748,14 @@ class FaultDialog(QDialog):
 
         mid = f.get("TargetModuleID", 20)
         idx = self.module_cb.findData(mid)
-        if idx >= 0: self.module_cb.setCurrentIndex(idx)
+        if idx >= 0:
+            self.module_cb.setCurrentIndex(idx)
+        self._update_service_ids()
+
+        sid = f.get("TargetModuleServiceID", 0)
+        idx = self.service_cb.findData(sid)
+        if idx >= 0:
+            self.service_cb.setCurrentIndex(idx)
 
         ft = f.get("Type", 1)
         idx = self.type_cb.findData(ft)
@@ -674,6 +763,7 @@ class FaultDialog(QDialog):
 
         self.bitpos_spin.setValue(f.get("BitPosition", 0))
         self.mask_edit.setText(hex(f.get("Mask", 0xFF)))
+        self.max_erase_spin.setValue(f.get("MaxEraseBytes", 512))
         self.start_spin.setValue(f.get("Start_TimeMs", 1000))
         self.dur_spin.setValue(f.get("DurationMs", 500))
         self.freq_spin.setValue(f.get("Freq", 0))
@@ -691,22 +781,27 @@ class FaultDialog(QDialog):
         self.accept()
 
     def get_fault(self) -> dict:
-        ft = self.type_cb.currentData()
+        ft    = self.type_cb.currentData()
         start = self.start_spin.value()
         dur   = self.dur_spin.value()
+        mid   = self.module_cb.currentData()
+        sid   = self.service_cb.currentData() if self.service_cb.count() else 0
         f = {
-            "TargetModuleID": self.module_cb.currentData(),
-            "Type":           ft,
-            "Active":         1 if self.active_cb.isChecked() else 0,
-            "Start_TimeMs":   start,
-            "DurationMs":     dur,
-            "End_timeMs":     start + dur,
-            "Freq":           self.freq_spin.value(),
+            "TargetModuleID":        mid,
+            "TargetModuleServiceID": sid,
+            "Type":                  ft,
+            "Active":                1 if self.active_cb.isChecked() else 0,
+            "Start_TimeMs":          start,
+            "DurationMs":            dur,
+            "End_timeMs":            start + dur,
+            "Freq":                  self.freq_spin.value(),
         }
         if ft in BITPOS_TYPES:
             f["BitPosition"] = self.bitpos_spin.value()
         elif ft in MASK_TYPES:
             f["Mask"] = int(self.mask_edit.text(), 16)
+        elif ft in PARTIAL_ERASE_TYPES:
+            f["MaxEraseBytes"] = self.max_erase_spin.value()
         else:
             f["BitPosition"] = 0
         return f
@@ -917,7 +1012,7 @@ class FaultTablePanel(QWidget):
         layout.addLayout(btn_row)
 
         # Table
-        cols = ["ID", "Module", "Type", "Start (ms)", "Duration (ms)",
+        cols = ["ID", "Module", "Service ID", "Type", "Start (ms)", "Duration (ms)",
                 "End (ms)", "Freq", "Bit/Mask", "Active"]
         self.table = QTableWidget(0, len(cols))
         self.table.setHorizontalHeaderLabels(cols)
@@ -928,6 +1023,7 @@ class FaultTablePanel(QWidget):
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.table.setShowGrid(True)
         self.table.itemSelectionChanged.connect(self._on_selection)
         layout.addWidget(self.table)
@@ -944,15 +1040,19 @@ class FaultTablePanel(QWidget):
             self.table.insertRow(r)
             ft   = f.get("Type", 0)
             mid  = f.get("TargetModuleID", 20)
+            sid  = f.get("TargetModuleServiceID", 0)
             bval = ""
             if ft in BITPOS_TYPES:
                 bval = f"bit {f.get('BitPosition', 0)}"
             elif ft in MASK_TYPES:
                 bval = hex(f.get("Mask", 0xFF))
+            elif ft in PARTIAL_ERASE_TYPES:
+                bval = f"max {f.get('MaxEraseBytes', 512)}B"
 
             cells = [
                 str(f.get("FaultID", "")),
                 TARGET_MODULES.get(mid, str(mid)),
+                service_id_label(sid) if sid else "—",
                 FAULT_TYPES.get(ft, "?"),
                 str(f.get("Start_TimeMs", "")),
                 str(f.get("DurationMs", "")),
@@ -964,12 +1064,13 @@ class FaultTablePanel(QWidget):
             for c, val in enumerate(cells):
                 item = QTableWidgetItem(val)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                if c == 8:
+                if c == 9:
                     item.setForeground(QColor("#4CAF50" if val == "✔" else "#FF5555"))
                 self.table.setItem(r, c, item)
 
         self.table.resizeColumnsToContents()
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
 
     def selected_row(self) -> int:
         rows = self.table.selectedItems()
@@ -1492,17 +1593,20 @@ class MainWindow(QMainWindow):
         fault = next((f for f in self.faults if f["FaultID"] == fid), None)
         if not fault:
             return
+        sid = fault.get("TargetModuleServiceID", 0)
         self._show_properties({
-            "FaultID":        str(fid),
-            "TargetModule":   TARGET_MODULES.get(fault.get("TargetModuleID"), "?"),
-            "Type":           FAULT_TYPES.get(fault.get("Type"), "?"),
-            "Active":         "Yes" if fault.get("Active") else "No",
-            "Start_TimeMs":   str(fault.get("Start_TimeMs", "")),
-            "DurationMs":     str(fault.get("DurationMs", "")),
-            "End_timeMs":     str(fault.get("End_timeMs", "")),
-            "Freq":           str(fault.get("Freq", 0)),
-            "BitPosition":    str(fault.get("BitPosition", "—")),
-            "Mask":           hex(fault.get("Mask", 0)) if "Mask" in fault else "—",
+            "FaultID":               str(fid),
+            "TargetModule":          TARGET_MODULES.get(fault.get("TargetModuleID"), "?"),
+            "ServiceID":             service_id_label(sid) if sid else "—",
+            "Type":                  FAULT_TYPES.get(fault.get("Type"), "?"),
+            "Active":                "Yes" if fault.get("Active") else "No",
+            "Start_TimeMs":          str(fault.get("Start_TimeMs", "")),
+            "DurationMs":            str(fault.get("DurationMs", "")),
+            "End_timeMs":            str(fault.get("End_timeMs", "")),
+            "Freq":                  str(fault.get("Freq", 0)),
+            "BitPosition":           str(fault.get("BitPosition", "—")),
+            "Mask":                  hex(fault.get("Mask", 0)) if "Mask" in fault else "—",
+            "MaxEraseBytes":         str(fault.get("MaxEraseBytes", "—")),
         })
         self._show_outline(fault, "Fault")
 
