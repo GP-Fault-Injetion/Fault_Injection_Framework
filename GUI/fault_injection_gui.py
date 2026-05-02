@@ -59,14 +59,13 @@ EXPECTED_RESULTS = {
     2: "MANUAL",
 }
 
-# Fault types that use BitPosition
+# Fault type categories
 BITPOS_TYPES        = {1, 3, 4}         # BIT_FLIP, STUCK_AT_0, STUCK_AT_1
 MASK_TYPES          = {2}               # MULTI_BIT_FLIP uses Mask byte
 PARTIAL_ERASE_TYPES = {12}              # PARTIAL_ERASE uses MaxEraseBytes
 NEITHER_TYPES       = {0, 5, 6, 7, 8, 9, 10, 11}
 
-# Service IDs per module, keyed by module ID → {combined_id: display_name}
-# Format: combined = 0x[ModuleID_Hex][ServiceID_Hex]  (matches FaultInjection_Types.h)
+# Service IDs per module — format: 0x[ModuleID_Hex][ServiceID_Hex] (FaultInjection_Types.h)
 SERVICE_IDS = {
     20: {   # NvM
         0x1400: "NVM_INIT",
@@ -114,7 +113,17 @@ def service_id_label(combined_id: int) -> str:
     module_id = (combined_id >> 8) & 0xFF
     return SERVICE_IDS.get(module_id, {}).get(combined_id, f"0x{combined_id:04X}")
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+def module_short(mid: int) -> str:
+    return TARGET_MODULES.get(mid, str(mid)).split(" (")[0]
+
+def fault_target_label(f: dict) -> str:
+    mid = f.get("TargetModuleID", 0)
+    sid = f.get("TargetModuleServiceID", 0)
+    mod = module_short(mid)
+    svc = service_id_label(sid) if sid else ""
+    return f"{mod} › {svc}" if svc else mod
+
+SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
 FAULT_JSON    = os.path.join(SCRIPT_DIR, "fault_config.json")
 TEST_JSON     = os.path.join(SCRIPT_DIR, "test_cases.json")
 SETTINGS_JSON = os.path.join(SCRIPT_DIR, "app_settings.json")
@@ -375,6 +384,11 @@ QLabel#section_label {
     border-bottom: 1px solid #4B6EAF;
     padding-bottom: 2px;
 }
+QLabel#hint_label {
+    color: #777777;
+    font-size: 11px;
+    font-style: italic;
+}
 """
 
 LIGHT_STYLE = """
@@ -560,6 +574,11 @@ QLabel#section_label {
     color: #4B6EAF; font-weight: bold; font-size: 11px;
     border-bottom: 1px solid #4B6EAF; padding-bottom: 2px;
 }
+QLabel#hint_label {
+    color: #888888;
+    font-size: 11px;
+    font-style: italic;
+}
 """
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -602,10 +621,11 @@ def save_settings(settings: dict):
 class FaultDialog(QDialog):
     def __init__(self, parent=None, fault: dict = None, used_ids: set = None):
         super().__init__(parent)
-        self.fault = fault or {}
+        self.fault    = fault or {}
         self.used_ids = used_ids or set()
         self.setWindowTitle("Edit Fault" if fault else "Add Fault")
-        self.setMinimumWidth(480)
+        self.setMinimumWidth(500)
+        self.setMinimumHeight(480)
         self.setModal(True)
         self._build_ui()
         if fault:
@@ -613,12 +633,22 @@ class FaultDialog(QDialog):
         self._update_bit_fields()
 
     def _build_ui(self):
-        main_layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 12)
+        outer.setSpacing(0)
+
+        # Scrollable content area
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+
+        content = QWidget()
+        main_layout = QVBoxLayout(content)
         main_layout.setSpacing(12)
-        main_layout.setContentsMargins(16, 16, 16, 16)
+        main_layout.setContentsMargins(16, 16, 16, 8)
 
         # ── Identity ──
-        id_grp = QGroupBox("Fault Identity")
+        id_grp  = QGroupBox("Fault Identity")
         id_form = QFormLayout(id_grp)
         id_form.setSpacing(8)
 
@@ -632,7 +662,7 @@ class FaultDialog(QDialog):
         main_layout.addWidget(id_grp)
 
         # ── Target ──
-        target_grp = QGroupBox("Target Configuration")
+        target_grp  = QGroupBox("Target Configuration")
         target_form = QFormLayout(target_grp)
         target_form.setSpacing(8)
 
@@ -651,31 +681,49 @@ class FaultDialog(QDialog):
         self.type_cb.currentIndexChanged.connect(self._update_bit_fields)
         target_form.addRow("Fault Type:", self.type_cb)
 
-        # BitPosition row
-        self.bitpos_row_lbl = QLabel("Bit Position (0–7):")
-        self.bitpos_spin = QSpinBox()
-        self.bitpos_spin.setRange(0, 7)
-        target_form.addRow(self.bitpos_row_lbl, self.bitpos_spin)
+        # BitPosition — byte selector + bit selector
+        self.bitpos_row_lbl = QLabel("Bit Position:")
+        self.bitpos_widget  = QWidget()
+        bp_layout = QHBoxLayout(self.bitpos_widget)
+        bp_layout.setContentsMargins(0, 0, 0, 0)
+        bp_layout.setSpacing(6)
+        self.byte_spin = QSpinBox()
+        self.byte_spin.setRange(0, 255)
+        self.byte_spin.setPrefix("Byte ")
+        self.byte_spin.setToolTip("Which byte in the buffer to target (0 = first byte)")
+        self.bit_spin  = QSpinBox()
+        self.bit_spin.setRange(0, 7)
+        self.bit_spin.setPrefix("Bit ")
+        self.bit_spin.setToolTip("Which bit within that byte (0 = LSB, 7 = MSB)")
+        bp_layout.addWidget(self.byte_spin)
+        bp_layout.addWidget(QLabel("·"))
+        bp_layout.addWidget(self.bit_spin)
+        bp_layout.addStretch()
+        target_form.addRow(self.bitpos_row_lbl, self.bitpos_widget)
 
         # Mask row (multi-bit)
-        self.mask_row_lbl = QLabel("Mask (hex byte, e.g. 0xFF):")
-        self.mask_edit = QLineEdit("0xFF")
+        self.mask_row_lbl = QLabel("Mask (hex, e.g. 0xFF):")
+        self.mask_edit    = QLineEdit("0xFF")
         self.mask_edit.setPlaceholderText("0x00–0xFF")
         target_form.addRow(self.mask_row_lbl, self.mask_edit)
 
         # MaxEraseBytes row (partial erase)
         self.max_erase_row_lbl = QLabel("Max Erase Bytes:")
-        self.max_erase_spin = QSpinBox()
+        self.max_erase_spin    = QSpinBox()
         self.max_erase_spin.setRange(1, 65535)
         self.max_erase_spin.setValue(512)
         target_form.addRow(self.max_erase_row_lbl, self.max_erase_spin)
 
-        self._update_service_ids()
+        self.max_erase_hint = QLabel("Must be < the erase length requested at runtime to have effect.")
+        self.max_erase_hint.setObjectName("hint_label")
+        self.max_erase_hint.setWordWrap(True)
+        target_form.addRow("", self.max_erase_hint)
 
+        self._update_service_ids()
         main_layout.addWidget(target_grp)
 
         # ── Timing ──
-        timing_grp = QGroupBox("Timing")
+        timing_grp  = QGroupBox("Timing")
         timing_form = QFormLayout(timing_grp)
         timing_form.setSpacing(8)
 
@@ -691,19 +739,33 @@ class FaultDialog(QDialog):
         self.dur_spin.valueChanged.connect(self._recalc_end)
         timing_form.addRow("Duration:", self.dur_spin)
 
-        self.end_lbl = QLabel("1500 ms")
-        self.end_lbl.setStyleSheet("color:#AAAAAA; font-style:italic;")
+        self.end_lbl = QLabel("0 ms")
+        self.end_lbl.setStyleSheet("font-style:italic;")
         timing_form.addRow("End Time (auto):", self.end_lbl)
 
         self.freq_spin = QSpinBox()
         self.freq_spin.setRange(0, 999999)
-        self.freq_spin.setSuffix(" ms  (0 = fire once)")
+        self.freq_spin.setSuffix(" ms")
+        self.freq_spin.setToolTip(
+            "0 = fire once during the Start→End window.\n"
+            "N > 0 = repeat every N ms within the window.\n"
+            "Example: Start=100, Duration=500, Freq=100 fires at 100ms, 200ms, 300ms, 400ms, 500ms."
+        )
         timing_form.addRow("Frequency:", self.freq_spin)
 
-        main_layout.addWidget(timing_grp)
+        freq_hint = QLabel("0 = fire once.  N > 0 = repeat every N ms inside the window.")
+        freq_hint.setObjectName("hint_label")
+        timing_form.addRow("", freq_hint)
 
-        # ── Buttons ──
+        main_layout.addWidget(timing_grp)
+        main_layout.addStretch()
+
+        scroll.setWidget(content)
+        outer.addWidget(scroll, 1)
+
+        # Buttons outside scroll so they're always visible
         btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(16, 0, 16, 0)
         btn_row.addStretch()
         cancel_btn = QPushButton("Cancel")
         cancel_btn.clicked.connect(self.reject)
@@ -712,7 +774,7 @@ class FaultDialog(QDialog):
         ok_btn.clicked.connect(self._on_accept)
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(ok_btn)
-        main_layout.addLayout(btn_row)
+        outer.addLayout(btn_row)
 
     def _update_service_ids(self):
         mid = self.module_cb.currentData()
@@ -727,16 +789,17 @@ class FaultDialog(QDialog):
         self.service_cb.blockSignals(False)
 
     def _update_bit_fields(self):
-        ft = self.type_cb.currentData()
+        ft         = self.type_cb.currentData()
         show_bit   = ft in BITPOS_TYPES
         show_mask  = ft in MASK_TYPES
         show_erase = ft in PARTIAL_ERASE_TYPES
         self.bitpos_row_lbl.setVisible(show_bit)
-        self.bitpos_spin.setVisible(show_bit)
+        self.bitpos_widget.setVisible(show_bit)
         self.mask_row_lbl.setVisible(show_mask)
         self.mask_edit.setVisible(show_mask)
         self.max_erase_row_lbl.setVisible(show_erase)
         self.max_erase_spin.setVisible(show_erase)
+        self.max_erase_hint.setVisible(show_erase)
 
     def _recalc_end(self):
         end = self.start_spin.value() + self.dur_spin.value()
@@ -759,17 +822,22 @@ class FaultDialog(QDialog):
 
         ft = f.get("Type", 1)
         idx = self.type_cb.findData(ft)
-        if idx >= 0: self.type_cb.setCurrentIndex(idx)
+        if idx >= 0:
+            self.type_cb.setCurrentIndex(idx)
 
-        self.bitpos_spin.setValue(f.get("BitPosition", 0))
+        # Restore byte + bit from flat BitPosition
+        bp = f.get("BitPosition", 0)
+        self.byte_spin.setValue(bp // 8)
+        self.bit_spin.setValue(bp % 8)
+
         self.mask_edit.setText(hex(f.get("Mask", 0xFF)))
         self.max_erase_spin.setValue(f.get("MaxEraseBytes", 512))
         self.start_spin.setValue(f.get("Start_TimeMs", 1000))
         self.dur_spin.setValue(f.get("DurationMs", 500))
         self.freq_spin.setValue(f.get("Freq", 0))
+        self._recalc_end()
 
     def _on_accept(self):
-        # Validate mask if multi-bit
         ft = self.type_cb.currentData()
         if ft in MASK_TYPES:
             try:
@@ -797,7 +865,7 @@ class FaultDialog(QDialog):
             "Freq":                  self.freq_spin.value(),
         }
         if ft in BITPOS_TYPES:
-            f["BitPosition"] = self.bitpos_spin.value()
+            f["BitPosition"] = self.byte_spin.value() * 8 + self.bit_spin.value()
         elif ft in MASK_TYPES:
             f["Mask"] = int(self.mask_edit.text(), 16)
         elif ft in PARTIAL_ERASE_TYPES:
@@ -813,13 +881,13 @@ class FaultDialog(QDialog):
 
 class TestCaseDialog(QDialog):
     def __init__(self, parent=None, tc: dict = None,
-                 used_ids: set = None, available_fault_ids: list = None):
+                 used_ids: set = None, available_faults: list = None):
         super().__init__(parent)
-        self.tc = tc or {}
-        self.used_ids = used_ids or set()
-        self.avail_fids = available_fault_ids or []
+        self.tc           = tc or {}
+        self.used_ids     = used_ids or set()
+        self.avail_faults = available_faults or []
         self.setWindowTitle("Edit Test Case" if tc else "Add Test Case")
-        self.setMinimumWidth(520)
+        self.setMinimumWidth(540)
         self.setMinimumHeight(580)
         self.setModal(True)
         self._build_ui()
@@ -832,7 +900,7 @@ class TestCaseDialog(QDialog):
         main_layout.setContentsMargins(16, 16, 16, 16)
 
         # ── Identity ──
-        id_grp = QGroupBox("Test Case Identity")
+        id_grp  = QGroupBox("Test Case Identity")
         id_form = QFormLayout(id_grp)
         id_form.setSpacing(8)
 
@@ -851,7 +919,7 @@ class TestCaseDialog(QDialog):
         main_layout.addWidget(id_grp)
 
         # ── Config ──
-        cfg_grp = QGroupBox("Test Configuration")
+        cfg_grp  = QGroupBox("Test Configuration")
         cfg_form = QFormLayout(cfg_grp)
         cfg_form.setSpacing(8)
 
@@ -871,21 +939,25 @@ class TestCaseDialog(QDialog):
         faults_grp = QGroupBox("Linked Faults (select faults to attach)")
         fl = QVBoxLayout(faults_grp)
 
-        hint = QLabel(f"Max {MAX_FAULTS_PER_TEST} faults. Available fault IDs shown below:")
-        hint.setStyleSheet("color:#AAAAAA; font-size:11px;")
+        hint = QLabel(f"Max {MAX_FAULTS_PER_TEST} faults per test case.")
+        hint.setObjectName("hint_label")
         fl.addWidget(hint)
 
         self.fault_list = QListWidget()
         self.fault_list.setAlternatingRowColors(True)
-        self.fault_list.setMaximumHeight(140)
+        self.fault_list.setMaximumHeight(150)
 
-        for fid in self.avail_fids:
-            item = QListWidgetItem(f"Fault #{fid}")
+        for f in self.avail_faults:
+            fid   = f.get("FaultID", "?")
+            ftype = FAULT_TYPES.get(f.get("Type", 0), "?")
+            target = fault_target_label(f)
+            label  = f"#{fid}  —  {ftype}  @  {target}"
+            item = QListWidgetItem(label)
             item.setData(Qt.ItemDataRole.UserRole, fid)
             item.setCheckState(Qt.CheckState.Unchecked)
             self.fault_list.addItem(item)
 
-        if not self.avail_fids:
+        if not self.avail_faults:
             self.fault_list.addItem(QListWidgetItem("  (no faults configured yet)"))
 
         fl.addWidget(self.fault_list)
@@ -899,7 +971,7 @@ class TestCaseDialog(QDialog):
         sel_row.addWidget(clr_all)
         sel_row.addStretch()
         self.sel_count_lbl = QLabel("0 selected")
-        self.sel_count_lbl.setStyleSheet("color:#AAAAAA; font-size:11px;")
+        self.sel_count_lbl.setObjectName("hint_label")
         sel_row.addWidget(self.sel_count_lbl)
         fl.addLayout(sel_row)
 
@@ -936,13 +1008,14 @@ class TestCaseDialog(QDialog):
         self.name_edit.setText(tc.get("Name", ""))
         self.desc_edit.setPlainText(tc.get("Description", ""))
         self.timeout_spin.setValue(tc.get("TimeoutMs", 2000))
-        er = tc.get("ExpectedResult", 0)
+        er  = tc.get("ExpectedResult", 0)
         idx = self.result_cb.findData(er)
-        if idx >= 0: self.result_cb.setCurrentIndex(idx)
+        if idx >= 0:
+            self.result_cb.setCurrentIndex(idx)
         linked = set(tc.get("FaultIDs", []))
         for i in range(self.fault_list.count()):
             item = self.fault_list.item(i)
-            fid = item.data(Qt.ItemDataRole.UserRole)
+            fid  = item.data(Qt.ItemDataRole.UserRole)
             if fid in linked:
                 item.setCheckState(Qt.CheckState.Checked)
         self._update_sel_count()
@@ -955,10 +1028,6 @@ class TestCaseDialog(QDialog):
         if len(selected) > MAX_FAULTS_PER_TEST:
             QMessageBox.warning(self, "Validation",
                 f"Maximum {MAX_FAULTS_PER_TEST} faults per test case.")
-            return
-        # No duplicate fault IDs
-        if len(selected) != len(set(selected)):
-            QMessageBox.warning(self, "Validation", "Duplicate fault IDs detected.")
             return
         self.accept()
 
@@ -987,13 +1056,15 @@ class TestCaseDialog(QDialog):
 # ─────────────────────────────────────────────────────────────────────────────
 
 class FaultTablePanel(QWidget):
+    # Column indices (after combining Module+Service into "Target")
+    COL_ID, COL_TARGET, COL_TYPE, COL_START, COL_DUR, COL_END, COL_FREQ, COL_BIT, COL_ACTIVE = range(9)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(6)
 
-        # Toolbar row
         btn_row = QHBoxLayout()
         self.add_btn  = QPushButton("＋  Add Fault")
         self.add_btn.setObjectName("btn_primary")
@@ -1011,8 +1082,7 @@ class FaultTablePanel(QWidget):
         btn_row.addWidget(self.del_btn)
         layout.addLayout(btn_row)
 
-        # Table
-        cols = ["ID", "Module", "Service ID", "Type", "Start (ms)", "Duration (ms)",
+        cols = ["ID", "Target", "Type", "Start (ms)", "Duration (ms)",
                 "End (ms)", "Freq", "Bit/Mask", "Active"]
         self.table = QTableWidget(0, len(cols))
         self.table.setHorizontalHeaderLabels(cols)
@@ -1021,9 +1091,8 @@ class FaultTablePanel(QWidget):
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
         self.table.horizontalHeader().setStretchLastSection(True)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(self.COL_TARGET, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(self.COL_TYPE,   QHeaderView.ResizeMode.Stretch)
         self.table.setShowGrid(True)
         self.table.itemSelectionChanged.connect(self._on_selection)
         layout.addWidget(self.table)
@@ -1036,52 +1105,56 @@ class FaultTablePanel(QWidget):
     def populate(self, faults: list):
         self.table.setRowCount(0)
         for f in faults:
-            r = self.table.rowCount()
+            r  = self.table.rowCount()
             self.table.insertRow(r)
-            ft   = f.get("Type", 0)
-            mid  = f.get("TargetModuleID", 20)
-            sid  = f.get("TargetModuleServiceID", 0)
+            ft        = f.get("Type", 0)
+            is_active = bool(f.get("Active", 1))
+
             bval = ""
             if ft in BITPOS_TYPES:
-                bval = f"bit {f.get('BitPosition', 0)}"
+                bp   = f.get("BitPosition", 0)
+                bval = f"byte {bp // 8}  bit {bp % 8}"
             elif ft in MASK_TYPES:
                 bval = hex(f.get("Mask", 0xFF))
             elif ft in PARTIAL_ERASE_TYPES:
-                bval = f"max {f.get('MaxEraseBytes', 512)}B"
+                bval = f"max {f.get('MaxEraseBytes', 512)} B"
 
             cells = [
                 str(f.get("FaultID", "")),
-                TARGET_MODULES.get(mid, str(mid)),
-                service_id_label(sid) if sid else "—",
+                fault_target_label(f),
                 FAULT_TYPES.get(ft, "?"),
                 str(f.get("Start_TimeMs", "")),
                 str(f.get("DurationMs", "")),
                 str(f.get("End_timeMs", "")),
                 str(f.get("Freq", 0)),
                 bval,
-                "✔" if f.get("Active", 1) else "✘",
+                "✔" if is_active else "✘",
             ]
+
+            # Inactive faults: dim all text
+            dim_color = QColor("#666666")
+
             for c, val in enumerate(cells):
                 item = QTableWidgetItem(val)
                 item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
-                if c == 9:
-                    item.setForeground(QColor("#4CAF50" if val == "✔" else "#FF5555"))
+                if c == self.COL_ACTIVE:
+                    item.setForeground(QColor("#4CAF50") if is_active else QColor("#FF5555"))
+                elif not is_active:
+                    item.setForeground(dim_color)
                 self.table.setItem(r, c, item)
 
         self.table.resizeColumnsToContents()
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(self.COL_TARGET, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(self.COL_TYPE,   QHeaderView.ResizeMode.Stretch)
 
     def selected_row(self) -> int:
         rows = self.table.selectedItems()
-        if rows:
-            return self.table.row(rows[0])
-        return -1
+        return self.table.row(rows[0]) if rows else -1
 
     def selected_fault_id(self):
         r = self.selected_row()
         if r >= 0:
-            item = self.table.item(r, 0)
+            item = self.table.item(r, self.COL_ID)
             if item:
                 return int(item.text())
         return None
@@ -1136,7 +1209,7 @@ class TestCaseTablePanel(QWidget):
     def populate(self, test_cases: list):
         self.table.setRowCount(0)
         for tc in test_cases:
-            r = self.table.rowCount()
+            r    = self.table.rowCount()
             self.table.insertRow(r)
             fids = tc.get("FaultIDs", [])
             cells = [
@@ -1152,8 +1225,8 @@ class TestCaseTablePanel(QWidget):
                     item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
                 if c == 3:
                     color = {"DATA_CORRUPTED": "#FF5555",
-                             "DATA_CLEAN": "#4CAF50",
-                             "MANUAL": "#E6B800"}.get(val, "#BBBBBB")
+                             "DATA_CLEAN":     "#4CAF50",
+                             "MANUAL":         "#E6B800"}.get(val, "#BBBBBB")
                     item.setForeground(QColor(color))
                 self.table.setItem(r, c, item)
         self.table.resizeColumnsToContents()
@@ -1161,9 +1234,7 @@ class TestCaseTablePanel(QWidget):
 
     def selected_row(self) -> int:
         rows = self.table.selectedItems()
-        if rows:
-            return self.table.row(rows[0])
-        return -1
+        return self.table.row(rows[0]) if rows else -1
 
     def selected_tc_id(self):
         r = self.selected_row()
@@ -1181,9 +1252,9 @@ class TestCaseTablePanel(QWidget):
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.settings  = load_settings()
-        self.faults    : list = []
-        self.test_cases: list = []
+        self.settings   = load_settings()
+        self.faults     : list = []
+        self.test_cases : list = []
         self._dirty = False
 
         self.setWindowTitle("Fault Injection Framework")
@@ -1197,6 +1268,12 @@ class MainWindow(QMainWindow):
         self._apply_theme(self.settings.get("theme", "dark"))
         self._load_data()
         self._refresh_all()
+
+    # ── Dirty state ───────────────────────────────────────────────────────────
+    def _set_dirty(self, dirty: bool = True):
+        self._dirty = dirty
+        base = "Fault Injection Framework"
+        self.setWindowTitle(f"{base} *" if dirty else base)
 
     # ── Theme ─────────────────────────────────────────────────────────────────
     def _apply_theme(self, theme: str):
@@ -1216,21 +1293,16 @@ class MainWindow(QMainWindow):
     def _build_menu(self):
         mb = self.menuBar()
 
-        # File
         file_menu = mb.addMenu("File")
-        new_a  = file_menu.addAction("New Configuration")
-        new_a.triggered.connect(self._on_new)
-        open_a = file_menu.addAction("Open Folder…")
-        open_a.triggered.connect(self._on_open_folder)
+        file_menu.addAction("New Configuration").triggered.connect(self._on_new)
+        file_menu.addAction("Open Folder…").triggered.connect(self._on_open_folder)
         file_menu.addSeparator()
         save_a = file_menu.addAction("Save")
         save_a.setShortcut(QKeySequence("Ctrl+S"))
         save_a.triggered.connect(self._on_save)
         file_menu.addSeparator()
-        exit_a = file_menu.addAction("Exit")
-        exit_a.triggered.connect(self.close)
+        file_menu.addAction("Exit").triggered.connect(self.close)
 
-        # Edit
         edit_menu = mb.addMenu("Edit")
         edit_menu.addAction("Add Fault").triggered.connect(self._add_fault)
         edit_menu.addAction("Delete Fault").triggered.connect(self._del_fault)
@@ -1238,15 +1310,12 @@ class MainWindow(QMainWindow):
         edit_menu.addAction("Add Test Case").triggered.connect(self._add_tc)
         edit_menu.addAction("Delete Test Case").triggered.connect(self._del_tc)
 
-        # View
         view_menu = mb.addMenu("View")
         self.theme_action = view_menu.addAction("Switch to Light Mode")
         self.theme_action.triggered.connect(self._toggle_theme)
 
-        # Help
         help_menu = mb.addMenu("Help")
-        about_a = help_menu.addAction("About")
-        about_a.triggered.connect(lambda: QMessageBox.information(
+        help_menu.addAction("About").triggered.connect(lambda: QMessageBox.information(
             self, "About",
             "Fault Injection Studio\nPyQt6 GUI for AUTOSAR Fault Injection Framework\n"
             "Graduation Project — Embedded Memory Stack Validation\n\n"
@@ -1257,7 +1326,6 @@ class MainWindow(QMainWindow):
         tb = QToolBar("Main Toolbar")
         tb.setIconSize(QSize(16, 16))
         tb.setMovable(False)
-        tb.setObjectName("maintoolbar")
         self.addToolBar(tb)
 
         tb.addAction("Save").triggered.connect(self._on_save)
@@ -1268,8 +1336,7 @@ class MainWindow(QMainWindow):
         tb.addAction("＋ Add Test Case").triggered.connect(self._add_tc)
         tb.addAction("✖ Del Test Case").triggered.connect(self._del_tc)
         tb.addSeparator()
-        self.theme_tb_action = tb.addAction("Theme")
-        self.theme_tb_action.triggered.connect(self._toggle_theme)
+        tb.addAction("Theme").triggered.connect(self._toggle_theme)
 
     # ── Central widget ────────────────────────────────────────────────────────
     def _build_central(self):
@@ -1312,23 +1379,24 @@ class MainWindow(QMainWindow):
         outline_dock = self._add_dock("Outline", self.outline_tree, L)
         self.splitDockWidget(proj_dock, outline_dock, Qt.Orientation.Vertical)
 
-        # Workflows (right)
-        wf_widget = QWidget()
-        wf_layout = QVBoxLayout(wf_widget)
-        wf_layout.setContentsMargins(8, 8, 8, 8)
-        wf_lbl = QLabel("No workflow selected.")
-        wf_lbl.setStyleSheet("color:#777; font-style:italic;")
-        wf_layout.addWidget(wf_lbl)
-        wf_layout.addStretch()
-        wf_desc = QLabel("This panel mirrors the\nWorkflows sidebar.\n\n"
-                         "Future: automated test\nexecution workflows.")
-        wf_desc.setStyleSheet("color:#666; font-size:11px;")
-        wf_layout.addWidget(wf_desc)
-        wf_dock = self._add_dock("Workflows Sidebar", wf_widget, R)
-        wf_dock.setMinimumWidth(180)
-        wf_dock.setMaximumWidth(240)
+        # Fault Summary (replaces empty Workflows sidebar)
+        self._summary_widget = QWidget()
+        sl = QVBoxLayout(self._summary_widget)
+        sl.setContentsMargins(8, 8, 8, 8)
+        sl.setSpacing(4)
+        sum_lbl = QLabel("Fault Summary")
+        sum_lbl.setObjectName("section_label")
+        sl.addWidget(sum_lbl)
+        self._summary_text = QTextEdit()
+        self._summary_text.setReadOnly(True)
+        self._summary_text.setFrameShape(QFrame.Shape.NoFrame)
+        self._summary_text.setFont(QFont("Segoe UI", 11))
+        sl.addWidget(self._summary_text)
+        summary_dock = self._add_dock("Fault Summary", self._summary_widget, R)
+        summary_dock.setMinimumWidth(190)
+        summary_dock.setMaximumWidth(260)
 
-        # Error Log (bottom-left)
+        # Error Log (bottom)
         self.error_table = QTableWidget(0, 4)
         self.error_table.setHorizontalHeaderLabels(["", "Message", "Source", "Timestamp"])
         self.error_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -1336,29 +1404,36 @@ class MainWindow(QMainWindow):
         self.error_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.error_table.setShowGrid(True)
         self.error_table.setAlternatingRowColors(True)
-        self.error_table.setMinimumHeight(120)
+        self.error_table.setMinimumHeight(100)
         err_dock = self._add_dock("Error Log  /  Problems", self.error_table, B)
 
-        # Properties (bottom-right)
+        # JSON Preview (bottom, alongside Error Log)
+        self._json_preview = QTextEdit()
+        self._json_preview.setReadOnly(True)
+        self._json_preview.setFont(QFont("Courier New", 10))
+        self._json_preview.setPlaceholderText("Select a fault to preview its JSON…")
+        self._json_preview.setMinimumHeight(100)
+        json_dock = self._add_dock("JSON Preview", self._json_preview, B)
+        self.splitDockWidget(err_dock, json_dock, Qt.Orientation.Horizontal)
+
+        # Properties (bottom)
         self.props_table = QTableWidget(0, 2)
         self.props_table.setHorizontalHeaderLabels(["Property", "Value"])
         self.props_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.props_table.verticalHeader().setVisible(False)
         self.props_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.props_table.setShowGrid(True)
-        self.props_table.setMinimumHeight(120)
+        self.props_table.setMinimumHeight(100)
         props_dock = self._add_dock("Properties", self.props_table, B)
-        self.splitDockWidget(err_dock, props_dock, Qt.Orientation.Horizontal)
+        self.splitDockWidget(json_dock, props_dock, Qt.Orientation.Horizontal)
 
-    def _add_dock(self, title, widget, area, min_w=None):
+    def _add_dock(self, title, widget, area):
         dock = QDockWidget(title, self)
         dock.setWidget(widget)
         dock.setFeatures(
             QDockWidget.DockWidgetFeature.DockWidgetMovable |
             QDockWidget.DockWidgetFeature.DockWidgetFloatable
         )
-        if min_w:
-            widget.setMinimumWidth(min_w)
         self.addDockWidget(area, dock)
         return dock
 
@@ -1373,9 +1448,38 @@ class MainWindow(QMainWindow):
         root.setExpanded(True)
         ecu.setExpanded(True)
 
+    def _update_summary(self):
+        total    = len(self.faults)
+        active   = sum(1 for f in self.faults if f.get("Active", 1))
+        inactive = total - active
+
+        by_type = {}
+        for f in self.faults:
+            name = FAULT_TYPES.get(f.get("Type", 0), "?")
+            by_type[name] = by_type.get(name, 0) + 1
+
+        by_module = {}
+        for f in self.faults:
+            name = module_short(f.get("TargetModuleID", 0))
+            by_module[name] = by_module.get(name, 0) + 1
+
+        lines = [
+            f"Faults:   {total} / {MAX_FAULTS}",
+            f"Active:   {active}   Inactive: {inactive}",
+            "",
+            "── By Type ──────────",
+        ]
+        for name, count in sorted(by_type.items()):
+            lines.append(f"  {name}: {count}")
+        lines += ["", "── By Module ─────────"]
+        for name, count in sorted(by_module.items()):
+            lines.append(f"  {name}: {count}")
+        lines += ["", f"Test Cases: {len(self.test_cases)} / {MAX_TEST_CASES}"]
+        self._summary_text.setPlainText("\n".join(lines))
+
     # ── Status bar ────────────────────────────────────────────────────────────
     def _build_statusbar(self):
-        self.sb = self.statusBar()
+        self.sb       = self.statusBar()
         self.sb_main  = QLabel()
         self.sb_path  = QLabel()
         self.sb_count = QLabel()
@@ -1394,16 +1498,27 @@ class MainWindow(QMainWindow):
 
     # ── Data I/O ──────────────────────────────────────────────────────────────
     def _load_data(self):
-        self.faults     = load_json(FAULT_JSON,    [])
-        self.test_cases = load_json(TEST_JSON,     [])
-        self._dirty = False
+        self.faults     = load_json(FAULT_JSON, [])
+        self.test_cases = load_json(TEST_JSON,  [])
+        self._set_dirty(False)
+        self._validate_loaded()
+
+    def _validate_loaded(self):
+        for f in self.faults:
+            start = f.get("Start_TimeMs", 0)
+            end   = f.get("End_timeMs", 0)
+            if end != 0 and start >= end:
+                self._log(
+                    f"Fault #{f.get('FaultID','?')}: Start_TimeMs ({start}) >= End_timeMs ({end}) — timing is invalid",
+                    "WARNING"
+                )
 
     def _on_save(self):
         ok1 = save_json(FAULT_JSON,    self.faults)
         ok2 = save_json(TEST_JSON,     self.test_cases)
         save_settings(self.settings)
         if ok1 and ok2:
-            self._dirty = False
+            self._set_dirty(False)
             self._update_statusbar("✔  Saved successfully")
             self._log("Saved fault_config.json and test_cases.json", "INFO")
             QTimer.singleShot(3000, lambda: self._update_statusbar("Ready"))
@@ -1418,9 +1533,9 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if r != QMessageBox.StandardButton.Yes:
                 return
-        self.faults = []
+        self.faults     = []
         self.test_cases = []
-        self._dirty = True
+        self._set_dirty(True)
         self._refresh_all()
         self._log("New configuration started", "INFO")
 
@@ -1442,6 +1557,7 @@ class MainWindow(QMainWindow):
         self.fault_panel.populate(self.faults)
         self.tc_panel.populate(self.test_cases)
         self._populate_project_tree()
+        self._update_summary()
         self._update_statusbar()
         self._validate_all()
 
@@ -1458,7 +1574,6 @@ class MainWindow(QMainWindow):
     # ── CRUD — Faults ─────────────────────────────────────────────────────────
     def _add_fault(self):
         if len(self.faults) >= MAX_FAULTS:
-            self._log(f"Fault list full (max {MAX_FAULTS})", "ERROR")
             QMessageBox.warning(self, "Limit Reached",
                 f"Maximum of {MAX_FAULTS} faults already configured.")
             return
@@ -1467,26 +1582,19 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.DialogCode.Accepted:
             new_id = next_free_id(used, MAX_FAULTS)
             data   = dlg.get_fault()
-            # Duplicate check
+            # Duplicate check: same ServiceID + same Type
             for f in self.faults:
-                if (f["TargetModuleID"] == data["TargetModuleID"] and
-                        f["Type"] == data["Type"] and
-                        f.get("BitPosition") == data.get("BitPosition")):
-                    self._log(
-                        f"Duplicate fault (Module={data['TargetModuleID']}, "
-                        f"Type={data['Type']}, Bit={data.get('BitPosition','-')})",
-                        "WARNING"
-                    )
+                if (f.get("TargetModuleServiceID") == data.get("TargetModuleServiceID") and
+                        f.get("Type") == data.get("Type")):
                     r = QMessageBox.question(self, "Duplicate Fault",
-                        "A fault with the same module/type/bit already exists.\n"
-                        "Add anyway?",
+                        f"A fault with the same service target and type already exists.\nAdd anyway?",
                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                     if r != QMessageBox.StandardButton.Yes:
                         return
                     break
             data["FaultID"] = new_id
             self.faults.append(data)
-            self._dirty = True
+            self._set_dirty()
             self._refresh_all()
             self._log(f"Added Fault #{new_id}", "INFO")
 
@@ -1497,14 +1605,14 @@ class MainWindow(QMainWindow):
         fault = next((f for f in self.faults if f["FaultID"] == fid), None)
         if not fault:
             return
-        used  = {f["FaultID"] for f in self.faults if f["FaultID"] != fid}
-        dlg   = FaultDialog(self, fault=fault, used_ids=used)
+        used = {f["FaultID"] for f in self.faults if f["FaultID"] != fid}
+        dlg  = FaultDialog(self, fault=fault, used_ids=used)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_fault()
             data["FaultID"] = fid
             idx = next(i for i, f in enumerate(self.faults) if f["FaultID"] == fid)
             self.faults[idx] = data
-            self._dirty = True
+            self._set_dirty()
             self._refresh_all()
             self._log(f"Updated Fault #{fid}", "INFO")
 
@@ -1512,12 +1620,10 @@ class MainWindow(QMainWindow):
         fid = self.fault_panel.selected_fault_id()
         if fid is None:
             return
-        # Warn if linked to test cases
-        linked_tests = [tc["Name"] for tc in self.test_cases
-                        if fid in tc.get("FaultIDs", [])]
+        linked_tests = [tc["Name"] for tc in self.test_cases if fid in tc.get("FaultIDs", [])]
         msg = f"Delete Fault #{fid}?"
         if linked_tests:
-            msg += (f"\n\n⚠ This fault is linked to {len(linked_tests)} test case(s):\n"
+            msg += (f"\n\n⚠ Linked to {len(linked_tests)} test case(s):\n"
                     + "\n".join(f"  • {n}" for n in linked_tests)
                     + "\n\nThe fault will be unlinked from those tests.")
         r = QMessageBox.question(self, "Delete Fault", msg,
@@ -1525,29 +1631,27 @@ class MainWindow(QMainWindow):
         if r != QMessageBox.StandardButton.Yes:
             return
         self.faults = [f for f in self.faults if f["FaultID"] != fid]
-        # Unlink from test cases
         for tc in self.test_cases:
             tc["FaultIDs"] = [x for x in tc.get("FaultIDs", []) if x != fid]
-        self._dirty = True
+        self._set_dirty()
         self._refresh_all()
         self._log(f"Deleted Fault #{fid}", "INFO")
 
-    # ── CRUD — Test Cases ────────────────────────────────────────────────────
+    # ── CRUD — Test Cases ─────────────────────────────────────────────────────
     def _add_tc(self):
         if len(self.test_cases) >= MAX_TEST_CASES:
-            self._log(f"Test case list full (max {MAX_TEST_CASES})", "ERROR")
             QMessageBox.warning(self, "Limit Reached",
                 f"Maximum of {MAX_TEST_CASES} test cases already configured.")
             return
-        avail = sorted(f["FaultID"] for f in self.faults)
         used  = {tc["TestID"] for tc in self.test_cases}
-        dlg   = TestCaseDialog(self, available_fault_ids=avail)
+        avail = sorted(self.faults, key=lambda f: f["FaultID"])
+        dlg   = TestCaseDialog(self, available_faults=avail)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             new_id = next_free_id(used, MAX_TEST_CASES)
             data   = dlg.get_test_case()
             data["TestID"] = new_id
             self.test_cases.append(data)
-            self._dirty = True
+            self._set_dirty()
             self._refresh_all()
             self._log(f"Added Test Case #{new_id}: {data['Name']}", "INFO")
 
@@ -1558,15 +1662,15 @@ class MainWindow(QMainWindow):
         tc = next((t for t in self.test_cases if t["TestID"] == tc_id), None)
         if not tc:
             return
-        avail = sorted(f["FaultID"] for f in self.faults)
         used  = {t["TestID"] for t in self.test_cases if t["TestID"] != tc_id}
-        dlg   = TestCaseDialog(self, tc=tc, used_ids=used, available_fault_ids=avail)
+        avail = sorted(self.faults, key=lambda f: f["FaultID"])
+        dlg   = TestCaseDialog(self, tc=tc, used_ids=used, available_faults=avail)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             data = dlg.get_test_case()
             data["TestID"] = tc_id
-            idx = next(i for i, t in enumerate(self.test_cases) if t["TestID"] == tc_id)
+            idx  = next(i for i, t in enumerate(self.test_cases) if t["TestID"] == tc_id)
             self.test_cases[idx] = data
-            self._dirty = True
+            self._set_dirty()
             self._refresh_all()
             self._log(f"Updated Test Case #{tc_id}", "INFO")
 
@@ -1575,17 +1679,17 @@ class MainWindow(QMainWindow):
         if tc_id is None:
             return
         tc = next((t for t in self.test_cases if t["TestID"] == tc_id), None)
-        r = QMessageBox.question(self, "Delete Test Case",
+        r  = QMessageBox.question(self, "Delete Test Case",
             f"Delete Test Case #{tc_id} '{tc.get('Name', '')}'?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if r != QMessageBox.StandardButton.Yes:
             return
         self.test_cases = [t for t in self.test_cases if t["TestID"] != tc_id]
-        self._dirty = True
+        self._set_dirty()
         self._refresh_all()
         self._log(f"Deleted Test Case #{tc_id}", "INFO")
 
-    # ── Selection handlers (outline + properties) ──────────────────────────
+    # ── Selection handlers ────────────────────────────────────────────────────
     def _on_fault_selected(self):
         fid = self.fault_panel.selected_fault_id()
         if fid is None:
@@ -1593,28 +1697,29 @@ class MainWindow(QMainWindow):
         fault = next((f for f in self.faults if f["FaultID"] == fid), None)
         if not fault:
             return
-        sid = fault.get("TargetModuleServiceID", 0)
+
+        bp = fault.get("BitPosition", 0)
         self._show_properties({
             "FaultID":               str(fid),
-            "TargetModule":          TARGET_MODULES.get(fault.get("TargetModuleID"), "?"),
-            "ServiceID":             service_id_label(sid) if sid else "—",
+            "Target":                fault_target_label(fault),
             "Type":                  FAULT_TYPES.get(fault.get("Type"), "?"),
             "Active":                "Yes" if fault.get("Active") else "No",
             "Start_TimeMs":          str(fault.get("Start_TimeMs", "")),
             "DurationMs":            str(fault.get("DurationMs", "")),
             "End_timeMs":            str(fault.get("End_timeMs", "")),
             "Freq":                  str(fault.get("Freq", 0)),
-            "BitPosition":           str(fault.get("BitPosition", "—")),
+            "BitPosition":           f"byte {bp // 8}  bit {bp % 8}" if "BitPosition" in fault else "—",
             "Mask":                  hex(fault.get("Mask", 0)) if "Mask" in fault else "—",
             "MaxEraseBytes":         str(fault.get("MaxEraseBytes", "—")),
         })
         self._show_outline(fault, "Fault")
+        self._json_preview.setPlainText(json.dumps(fault, indent=2))
 
     def _on_tc_selected(self):
         tc_id = self.tc_panel.selected_tc_id()
         if tc_id is None:
             return
-        tc = next((t for t in self.test_cases if t["TestID"] == tc_id), None)
+        tc   = next((t for t in self.test_cases if t["TestID"] == tc_id), None)
         if not tc:
             return
         fids = tc.get("FaultIDs", [])
@@ -1628,6 +1733,7 @@ class MainWindow(QMainWindow):
             "FaultCount":     str(len(fids)),
         })
         self._show_outline(tc, "TestCase")
+        self._json_preview.setPlainText(json.dumps(tc, indent=2))
 
     def _show_properties(self, props: dict):
         self.props_table.setRowCount(0)
@@ -1643,20 +1749,19 @@ class MainWindow(QMainWindow):
 
     def _show_outline(self, obj: dict, kind: str):
         self.outline_tree.clear()
-        root = QTreeWidgetItem(self.outline_tree,
-            [kind, ""])
+        root = QTreeWidgetItem(self.outline_tree, [kind, ""])
         for k, v in obj.items():
             child = QTreeWidgetItem(root, [str(k), str(v)])
             child.setForeground(0, QColor("#4B6EAF"))
         root.setExpanded(True)
         self.outline_tree.resizeColumnToContents(0)
 
-    # ── Error Log ──────────────────────────────────────────────────────────
+    # ── Error Log ──────────────────────────────────────────────────────────────
     def _log(self, message: str, level: str = "INFO"):
         icon  = {"INFO": "ℹ", "WARNING": "⚠", "ERROR": "✖"}.get(level, "ℹ")
         color = {"INFO": "#BBBBBB", "WARNING": "#E6B800", "ERROR": "#FF5555"}.get(level, "#BBBBBB")
         ts    = datetime.now().strftime("%H:%M:%S")
-        r = self.error_table.rowCount()
+        r     = self.error_table.rowCount()
         self.error_table.insertRow(r)
         for c, val in enumerate([icon, message, "GUI", ts]):
             item = QTableWidgetItem(val)
@@ -1666,7 +1771,7 @@ class MainWindow(QMainWindow):
             self.error_table.setItem(r, c, item)
         self.error_table.scrollToBottom()
 
-    # ── Close event ────────────────────────────────────────────────────────
+    # ── Close event ───────────────────────────────────────────────────────────
     def closeEvent(self, event):
         if self._dirty:
             r = QMessageBox.question(self, "Unsaved Changes",
