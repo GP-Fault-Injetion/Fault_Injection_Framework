@@ -1,0 +1,35 @@
+[
+  {
+    "TargetModuleID": 20,
+    "Type": 4,
+    "Active": 1,
+    "Start_TimeMs": 4,
+    "DurationMs": 3,
+    "End_timeMs": 7,
+    "Freq": 0,
+    "BitPosition": 2,
+    "FaultID": 0
+  },
+  {
+    "TargetModuleID": 212,
+    "Type": 7,
+    "Active": 1,
+    "Start_TimeMs": 0,
+    "DurationMs": 0,
+    "End_timeMs": 0,
+    "Freq": 0,
+    "BitPosition": 0,
+    "FaultID": 1
+  },
+  {
+    "TargetModuleID": 20,
+    "Type": 0,
+    "Active": 1,
+    "Start_TimeMs": 3,
+    "DurationMs": 2,
+    "End_timeMs": 5,
+    "Freq": 0,
+    "BitPosition": 0,
+    "FaultID": 2
+  }
+]
