@@ -26,6 +26,8 @@
 #define TARGET_NVM_ERASE_NV_BLOCK         0x1410
 #define TARGET_NVM_MAIN_FUNCTION          0x1411
 
+#define FAULT_TARGET_NVM                  0x1400
+
 /* --- Fee Targets --- */
 #define TARGET_FEE_INIT                   0x1500
 #define TARGET_FEE_READ                   0x1502
@@ -51,6 +53,8 @@
 #define TARGET_FLS_GET_STATUS             0x5C05
 #define TARGET_FLS_GET_JOB_RESULT         0x5C06
 #define TARGET_FLS_MAIN_FUNCTION          0x5CFF
+
+#define FAULT_TARGET_FLS                  0x5C00
 /** @} */
 
 /**

@@ -81,7 +81,7 @@ Std_ReturnType FaultState_Activate_fault(uint16_t moduleId, FaultType_t type, ui
 
     FaultConfig_t* fault = &Fault_Table[fault_Id];
     
-    fault->TargetModuleID = moduleId;
+    fault->TargetModuleServiceID = moduleId;
     fault->Type = type;
     fault->DurationMs = duration;
     

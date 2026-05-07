@@ -7,11 +7,18 @@
 
 #undef NvM_WriteBlock
 #undef NvM_ReadBlock
+#undef NvM_InvalidateNvBlock
+#undef NvM_EraseNvBlock
+#undef NvM_SetDataIndex
 #undef Fls_Write
 
 extern Std_ReturnType NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr );	
 extern Std_ReturnType NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_SrcPtr );	
+extern Std_ReturnType NvM_InvalidateNvBlock( NvM_BlockIdType blockId );
+extern Std_ReturnType NvM_EraseNvBlock( NvM_BlockIdType blockId );
+extern Std_ReturnType NvM_SetDataIndex( NvM_BlockIdType blockId, uint8 DataIndex );
 extern Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length);
+
 
 extern const NvM_ConfigType NvM_Config;
 extern FaultConfig_t* FaultState_GetConfig(uint16_t fault_Id);
@@ -47,20 +54,73 @@ static boolean IsFeeHeader(const uint8* data, uint32 len) {
 /* --- WRITE HOOK --- */
 Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_SrcPtr ) {
     uint16_t i;
-    uint8* mutableDataPtr = (uint8*)NvM_SrcPtr; 
-    
+    Std_ReturnType retVal = E_OK;
+    boolean callOriginal = TRUE;
+    boolean corruptReturnValue = FALSE;
+    NvM_BlockIdType activeBlockId = blockId;
+
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
              FaultConfig_t* cfg = FaultState_GetConfig(i);
-             uint32_t dataLength = GetNvMBlockLength(blockId);
-             if(dataLength > 0) {
-                 Fault_Inject(mutableDataPtr, dataLength, cfg);
+             
+             switch(cfg->Type) {
+                 case FAULT_DELAY:
+                 {
+                     /* Simulate Delay using a busy wait loop */
+                     volatile uint32_t delayCount = 10000; /* Arbitrary dummy value */
+                     while(delayCount--) {}
+                     break;
+                 }
+                 case FAULT_OMISSION:
+                 case FAULT_QUEUE_OVERFLOW:
+                 {
+                     /* Return without passing the job to the NvM queue */
+                     callOriginal = FALSE;
+                     retVal = E_NOT_OK;
+                     break;
+                 }
+                 case FAULT_PARAMETER_CORRUPTION:
+                 {
+                     /* --- TEST MACROS HERE --- */
+                     boolean isInit = NVM_IS_INITIALIZED();
+                     boolean isPend = NVM_IS_BLOCK_PENDING(blockId);
+                     boolean isWP   = NVM_IS_WRITE_PROTECTED(blockId);
+                     boolean isLock = NVM_IS_BLOCK_LOCKED(blockId);
+                     boolean isRom  = NVM_IS_DATASET_ROM_BLOCK(blockId);
+
+                     /* Print the status for demonstration */
+                     printf("   [Hook] Macros Test -> Init:%d Pend:%d WP:%d Lock:%d Rom:%d\n", 
+                            isInit, isPend, isWP, isLock, isRom);
+
+                     /* Corrupt the Block ID so NvM_WriteBlock rejects it */
+                     activeBlockId ^= 0xFFFF;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 {
+                     /* Corrupt the return value after calling the original function */
+                     corruptReturnValue = TRUE;
+                     break;
+                 }
+                 /* Data corruption faults (FAULT_DATA_CORRUPTION, FAULT_BIT_FLIP, etc.)
+                    should NOT be injected here for WriteBlock. They should be injected
+                    at the FLS/FEE layer to properly simulate hardware failure. */
+                 default:
+                     break;
              }
         }
     }
-    return NvM_WriteBlock(blockId, NvM_SrcPtr);
-}
 
+    if(callOriginal == TRUE) {
+        retVal = NvM_WriteBlock(activeBlockId, NvM_SrcPtr);
+        
+        if(corruptReturnValue == TRUE) {
+            retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
+        }
+    }
+
+    return retVal;
+}
 /* --- READ HOOK --- */
 Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
     uint16_t i;
@@ -124,6 +184,189 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
 
     if(callOriginal == TRUE) {
         retVal = NvM_ReadBlock(activeBlockId, NvM_DstPtr);
+        if(corruptReturnValue == TRUE) {
+            retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
+        }
+    }
+
+    return retVal;
+}
+
+/* --- INVALIDATE HOOK --- */
+Std_ReturnType Hook_NvM_InvalidateNvBlock( NvM_BlockIdType blockId ) {
+    uint16_t i;
+    Std_ReturnType retVal = E_OK;
+    boolean callOriginal = TRUE;
+    boolean corruptReturnValue = FALSE;
+    NvM_BlockIdType activeBlockId = blockId;
+
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             
+             switch(cfg->Type) {
+                 case FAULT_DELAY:
+                 {
+                     /* Simulate Delay using a busy wait loop */
+                     volatile uint32_t delayCount = 10000; 
+                     while(delayCount--) {}
+                     break;
+                 }
+                 case FAULT_OMISSION:
+                 case FAULT_QUEUE_OVERFLOW:
+                 {
+                     /* Return without passing the job to the NvM queue */
+                     callOriginal = FALSE;
+                     retVal = E_NOT_OK;
+                     break;
+                 }
+                 case FAULT_PARAMETER_CORRUPTION:
+                 {
+                     /* Corrupt the Block ID so NvM_InvalidateNvBlock rejects it */
+                     activeBlockId ^= 0xFFFF;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 {
+                     /* Corrupt the return value after calling the original function */
+                     corruptReturnValue = TRUE;
+                     break;
+                 }
+                 default:
+                     break;
+             }
+        }
+    }
+
+    if(callOriginal == TRUE) {
+        retVal = NvM_InvalidateNvBlock(activeBlockId);
+        
+        if(corruptReturnValue == TRUE) {
+            retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
+        }
+    }
+
+    return retVal;
+}
+
+/* --- ERASE HOOK --- */
+Std_ReturnType Hook_NvM_EraseNvBlock( NvM_BlockIdType blockId ) {
+    uint16_t i;
+    Std_ReturnType retVal = E_OK;
+    boolean callOriginal = TRUE;
+    boolean corruptReturnValue = FALSE;
+    NvM_BlockIdType activeBlockId = blockId;
+
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             
+             switch(cfg->Type) {
+                 case FAULT_DELAY:
+                 {
+                     /* Simulate Delay using a busy wait loop */
+                     volatile uint32_t delayCount = 10000; 
+                     while(delayCount--) {}
+                     break;
+                 }
+                 case FAULT_OMISSION:
+                 case FAULT_QUEUE_OVERFLOW:
+                 {
+                     /* Return without passing the job to the NvM queue */
+                     callOriginal = FALSE;
+                     retVal = E_NOT_OK;
+                     break;
+                 }
+                 case FAULT_PARAMETER_CORRUPTION:
+                 {
+                     /* Corrupt the Block ID so NvM_EraseNvBlock rejects it */
+                     activeBlockId ^= 0xFFFF;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 {
+                     /* Corrupt the return value after calling the original function */
+                     corruptReturnValue = TRUE;
+                     break;
+                 }
+                 default:
+                     break;
+             }
+        }
+    }
+
+    if(callOriginal == TRUE) {
+        retVal = NvM_EraseNvBlock(activeBlockId);
+        
+        if(corruptReturnValue == TRUE) {
+            retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
+        }
+    }
+
+    return retVal;
+}
+
+/* --- SET DATA INDEX HOOK (Synchronous) --- */
+Std_ReturnType Hook_NvM_SetDataIndex( NvM_BlockIdType blockId, uint8 DataIndex ) {
+    uint16_t i;
+    Std_ReturnType retVal = E_OK;
+    boolean callOriginal = TRUE;
+    boolean corruptReturnValue = FALSE;
+    
+    /* Local copies of parameters that we can corrupt */
+    NvM_BlockIdType activeBlockId = blockId;
+    uint8 activeDataIndex = DataIndex;
+
+    for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
+        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+             FaultConfig_t* cfg = FaultState_GetConfig(i);
+             
+             switch(cfg->Type) {
+                 case FAULT_DELAY:
+                 {
+                     /* Simulate Delay using a busy wait loop before execution */
+                     volatile uint32_t delayCount = 10000; 
+                     while(delayCount--) {}
+                     break;
+                 }
+                 case FAULT_OMISSION:
+                 {
+                     /* 
+                      * For synchronous functions, omission means we just 
+                      * skip the function call and return an error.
+                      * Note: QUEUE_OVERFLOW is removed because it does not apply.
+                      */
+                     callOriginal = FALSE;
+                     retVal = E_NOT_OK;
+                     break;
+                 }
+                 case FAULT_PARAMETER_CORRUPTION:
+                 {
+                     /* 
+                      * Corrupt the inputs so the real NvM_SetDataIndex rejects them 
+                      * and fires a DET error (e.g., NVM_E_PARAM_BLOCK_ID or NVM_E_PARAM_BLOCK_DATA_IDX)
+                      */
+                     activeBlockId ^= 0xFFFF;   /* Flip bits to create a garbage Block ID */
+                     activeDataIndex ^= 0xFF; /* Flip bits to create a garbage Data Index */
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 {
+                     /* Flag to corrupt the return value after calling the original function */
+                     corruptReturnValue = TRUE;
+                     break;
+                 }
+                 default:
+                     break;
+             }
+        }
+    }
+
+    /* Execute the real BSW function if it wasn't omitted */
+    if(callOriginal == TRUE) {
+        retVal = NvM_SetDataIndex(activeBlockId, activeDataIndex);
+        
+        /* Corrupt the return value as it leaves the BSW boundary */
         if(corruptReturnValue == TRUE) {
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
         }
