@@ -1,0 +1,23 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build C project",
+			"type": "shell",
+			"command": "gcc -IInclude -IFrameWork_Header_Files src/*.c FrameWork_src_Files/*.c -o my_project.exe",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build C project",
+			"type": "shell",
+			"command": "gcc -IInclude -IFrameWork_Header_Files src/*.c FrameWork_src_Files/*.c -o my_project.exe",
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": "build"
+		}
+	]
+}
