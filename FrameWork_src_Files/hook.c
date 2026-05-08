@@ -57,7 +57,11 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
     Std_ReturnType retVal = E_OK;
     boolean callOriginal = TRUE;
     boolean corruptReturnValue = FALSE;
+
+    /* Local copies for corruption */
     NvM_BlockIdType activeBlockId = blockId;
+    const void* activeSrcPtr = NvM_SrcPtr;
+
 
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
@@ -81,19 +85,10 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
                  }
                  case FAULT_PARAMETER_CORRUPTION:
                  {
-                     /* --- TEST MACROS HERE --- */
-                     boolean isInit = NVM_IS_INITIALIZED();
-                     boolean isPend = NVM_IS_BLOCK_PENDING(blockId);
-                     boolean isWP   = NVM_IS_WRITE_PROTECTED(blockId);
-                     boolean isLock = NVM_IS_BLOCK_LOCKED(blockId);
-                     boolean isRom  = NVM_IS_DATASET_ROM_BLOCK(blockId);
-
-                     /* Print the status for demonstration */
-                     printf("   [Hook] Macros Test -> Init:%d Pend:%d WP:%d Lock:%d Rom:%d\n", 
-                            isInit, isPend, isWP, isLock, isRom);
-
                      /* Corrupt the Block ID so NvM_WriteBlock rejects it */
                      activeBlockId ^= 0xFFFF;
+                     /* Corrupt Address Pointer to trigger NVM_E_PARAM_ADDRESS */
+                     activeSrcPtr = NULL;
                      break;
                  }
                  case FAULT_RETURN_VALUE_CORRUPTION:
@@ -112,7 +107,7 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
     }
 
     if(callOriginal == TRUE) {
-        retVal = NvM_WriteBlock(activeBlockId, NvM_SrcPtr);
+        retVal = NvM_WriteBlock(activeBlockId, activeSrcPtr);
         
         if(corruptReturnValue == TRUE) {
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
@@ -127,7 +122,10 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
     Std_ReturnType retVal = E_OK;
     boolean callOriginal = TRUE;
     boolean corruptReturnValue = FALSE;
+
+    /* Local copies for corruption */
     NvM_BlockIdType activeBlockId = blockId;
+    void* activeDstPtr = NvM_DstPtr;
 
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
         if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
@@ -154,6 +152,8 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
                  {
                      /* Corrupt the Block ID so NvM_ReadBlock rejects it */
                      activeBlockId ^= 0xFFFF;
+                     /* Corrupt Address Pointer to trigger NVM_E_PARAM_ADDRESS */
+                     activeDstPtr = NULL;
                      break;
                  }
                  case FAULT_RETURN_VALUE_CORRUPTION:
@@ -183,7 +183,7 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
     }
 
     if(callOriginal == TRUE) {
-        retVal = NvM_ReadBlock(activeBlockId, NvM_DstPtr);
+        retVal = NvM_ReadBlock(activeBlockId, activeDstPtr);
         if(corruptReturnValue == TRUE) {
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
         }
@@ -347,7 +347,7 @@ Std_ReturnType Hook_NvM_SetDataIndex( NvM_BlockIdType blockId, uint8 DataIndex )
                       * and fires a DET error (e.g., NVM_E_PARAM_BLOCK_ID or NVM_E_PARAM_BLOCK_DATA_IDX)
                       */
                      activeBlockId ^= 0xFFFF;   /* Flip bits to create a garbage Block ID */
-                     activeDataIndex ^= 0xFF; /* Flip bits to create a garbage Data Index */
+                     activeDataIndex = 255;     /* Flip bits to create a garbage Data Index */
                      break;
                  }
                  case FAULT_RETURN_VALUE_CORRUPTION:

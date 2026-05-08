@@ -24,6 +24,11 @@
 static int g_testsPassed = 0;
 static int g_testsFailed = 0;
 
+/* --- DET Mocking --- */
+extern uint8 Last_Det_Error;
+
+
+
 /* =========================================================================
  * SYSTEM SIMULATION HELPERS
  * ========================================================================= */
@@ -704,6 +709,77 @@ void Test_Pending_Block_Conflict(void) {
     printf("============================================\n\n");
 }
 
+void Test_ParamCorruption_WriteBlock(void) {
+    printf("=== TEST: Parameter Corruption (NvM_WriteBlock) ===\n");
+    printf("   Goal: Verify BSW rejects bad pointers/IDs and fires DET.\n");
+    
+    uint8 data[BUFFER_SIZE];
+    ResetBuffer(data, 0x00);
+    
+    Fault_Clear(FAULT_TARGET_NVM);
+    Last_Det_Error = 0; /* Reset DET tracker */
+
+    /* Activate Parameter Corruption */
+    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_PARAMETER_CORRUPTION, 500, 0);
+    FaultConfig_t* cfg = FaultState_GetConfig(0);
+    cfg->Start_TimeMs = GetSystemTimeMs();
+    cfg->End_timeMs = cfg->Start_TimeMs + 500;
+    
+    ProcessSystem(5); /* Update fault state to ACTIVE */
+
+    /* Execute: The hook will swap our good parameters for garbage */
+    Std_ReturnType status = NvM_WriteBlock(3, data); /* Use Block 3 to avoid pending state from previous test */
+
+    /* Assert: Did it fail safely AND report to DET? */
+    if (status == E_NOT_OK && Last_Det_Error != 0) {
+        printf("   [Hook] Triggered DET Error Code: 0x%02X\n", Last_Det_Error);
+        printf("   RESULT: [PASS] - BSW defended itself successfully.\n");
+        g_testsPassed++;
+    } else {
+        printf("   [Hook] FAILED to trigger DET or BSW accepted bad data!\n");
+        printf("   RESULT: [FAIL]\n");
+        g_testsFailed++;
+    }
+    printf("============================================================\n\n");
+}
+
+void Test_ParamCorruption_SetDataIndex(void) {
+    printf("=== TEST: Parameter Corruption (NvM_SetDataIndex) ===\n");
+    printf("   Goal: Verify BSW catches out-of-bounds Dataset Index.\n");
+    
+    Fault_Clear(FAULT_TARGET_NVM);
+    Last_Det_Error = 0; /* Reset DET tracker */
+
+    /* Activate Parameter Corruption */
+    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_PARAMETER_CORRUPTION, 500, 0);
+    FaultConfig_t* cfg = FaultState_GetConfig(0);
+    cfg->Start_TimeMs = GetSystemTimeMs();
+    cfg->End_timeMs = cfg->Start_TimeMs + 500;
+    
+    ProcessSystem(5); /* Update fault state to ACTIVE */
+
+    /* Execute: The hook will force the index to 255 */
+    uint16_t datasetBlockId = 3; /* Use any valid block, the hook will corrupt it anyway */
+    Std_ReturnType status = NvM_SetDataIndex(datasetBlockId, 0);
+
+    /* Assert: Did it fail safely AND report the specific Index error? */
+    if (status == E_NOT_OK && Last_Det_Error != 0) {
+        printf("   [Hook] Triggered DET Error Code: 0x%02X\n", Last_Det_Error);
+        if (Last_Det_Error == NVM_E_PARAM_BLOCK_DATA_IDX || Last_Det_Error == NVM_E_PARAM_BLOCK_ID) {
+            printf("   RESULT: [PASS] - BSW rejected out-of-bounds index/ID.\n");
+            g_testsPassed++;
+        } else {
+            printf("   RESULT: [FAIL] - Wrong DET error fired.\n");
+            g_testsFailed++;
+        }
+    } else {
+        printf("   [Hook] FAILED to trigger DET or BSW accepted bad index!\n");
+        printf("   RESULT: [FAIL]\n");
+        g_testsFailed++;
+    }
+    printf("============================================================\n\n");
+}
+
 /* =========================================================================
  * AUTOSAR RESTRICTION TESTS (NVM698, NVM705, NVM579, NVM212)
  * ========================================================================= */
@@ -892,6 +968,12 @@ int main(void) {
     Test_Case4_Test_Case4_Dataset();
     Test_Queue_Overflow();
     Test_Pending_Block_Conflict();
+
+    printf("\n\n============================================================\n");
+    printf("   PARAMETER CORRUPTION (INPUT ROBUSTNESS) TESTS\n");
+    printf("============================================================\n\n");
+    Test_ParamCorruption_WriteBlock();
+    Test_ParamCorruption_SetDataIndex();
 
     printf("\n\n============================================================\n");
     printf("   AUTOSAR RESTRICTIONS TESTS (NVM698, NVM705, NVM579, NVM212)\n");
