@@ -100,81 +100,7 @@ void PrintBinary(uint8 val) {
     }
 }
 
-/* * NEW: Better Analyzer Logic */
-void AnalyzeResult(const char* testName, uint8* expected, uint8* actual, boolean expectFault) {
-    NvM_RequestResultType status;
-    NvM_GetErrorStatus(TEST_BLOCK_ID, &status);
-    
-    /* Check Data Integrity (App Level) */
-    boolean dataMatch = (memcmp(expected, actual, BUFFER_SIZE) == 0);
-    boolean corruptionDetected = !dataMatch;
 
-    /* Define Who Discovered It */
-    const char* detector = "NONE";
-    const char* outcome = "UNKNOWN";
-    boolean testPassed = FALSE;
-
-    if (status == NVM_REQ_INTEGRITY_FAILED) {
-        detector = "NvM (CRC Check)";
-    } else if (status == NVM_REQ_NV_INVALIDATED) {
-        detector = "Fee (Header Check)";
-    } else if (status == NVM_REQ_NOT_OK) {
-        detector = "Driver (Write Error)";
-    } else if (status == NVM_REQ_OK) {
-        if (corruptionDetected) {
-            detector = "Application (Silent Corruption!)";
-        } else {
-            detector = "No Error Detected";
-        }
-    }
-
-    /* Logic for Pass/Fail */
-    if (expectFault) {
-        if (status != NVM_REQ_OK) {
-            outcome = "Fault Injected Successfully. Stack CAUGHT it.";
-            testPassed = TRUE;
-        } else if (corruptionDetected) {
-            outcome = "Fault Injected Successfully. Stack MISSED it.";
-            testPassed = FALSE; 
-        } else {
-            outcome = "Fault Failed to Inject (Data is clean).";
-            testPassed = FALSE;
-        }
-    } else {
-        /* We expect NO fault */
-        if (status == NVM_REQ_OK && !corruptionDetected) {
-            outcome = "Normal Operation (Success).";
-            testPassed = TRUE;
-        } else {
-            outcome = "Unexpected Error or Corruption!";
-            testPassed = FALSE;
-        }
-    }
-
-    /* Print Summary */
-    printf("   ------------------------------------------------------------\n");
-    printf("   Status:   %s\n", outcome);
-    printf("   Detector: %s\n", detector);
-    
-    if (corruptionDetected && status == NVM_REQ_OK) {
-        /* Print diff for silent corruption */
-        for(int i=0; i<BUFFER_SIZE; i++) {
-            if(expected[i] != actual[i]) {
-                printf("   [Diff]:   Byte %d changed from 0x%02X to 0x%02X\n", i, expected[i], actual[i]);
-                break;
-            }
-        }
-    }
-
-    if (testPassed) {
-        printf("   RESULT:   [PASS]\n");
-        g_testsPassed++;
-    } else {
-        printf("   RESULT:   [FAIL]\n");
-        g_testsFailed++;
-    }
-    printf("============================================================\n\n");
-}
 
 void AnalyzeResult_Block(const char* testName, uint8* expected, uint8* actual, boolean expectFault, uint16_t blockId) {
     NvM_RequestResultType status;
@@ -274,7 +200,7 @@ void Test_BitFlip_Immediate(void) {
     memset(read, 0, BUFFER_SIZE);
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
 
-    AnalyzeResult("BitFlip Immediate", golden, read, TRUE);
+    AnalyzeResult_Block("BitFlip Immediate", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_Delayed_Start(void) {
@@ -295,13 +221,13 @@ void Test_Delayed_Start(void) {
     printf("   [Phase 1] Immediate Write (Before Fault Start)\n");
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Delayed Start (Phase 1)", golden, read, FALSE);
+    AnalyzeResult_Block("Delayed Start (Phase 1)", golden, read, FALSE,TEST_BLOCK_ID);
 
     printf("   [Phase 2] Waiting for Fault Activation...\n");
     ProcessSystem(delay + 50); 
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Delayed Start (Phase 2)", golden, read, TRUE);
+    AnalyzeResult_Block("Delayed Start (Phase 2)", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_StuckAt_Logic(void) {
@@ -321,7 +247,7 @@ void Test_StuckAt_Logic(void) {
     ProcessSystem(5);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Stuck-At-1", golden, read, TRUE);
+    AnalyzeResult_Block("Stuck-At-1", golden, read, TRUE,TEST_BLOCK_ID);
 
     printf("   [Part B] Stuck-At-0 on Byte 5, Bit 0\n");
     ResetBuffer(sent, 0xFF); 
@@ -337,7 +263,7 @@ void Test_StuckAt_Logic(void) {
     ProcessSystem(5);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Stuck-At-0", golden, read, TRUE);
+    AnalyzeResult_Block("Stuck-At-0", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_Frequency_Pulse(void) {
@@ -358,17 +284,17 @@ void Test_Frequency_Pulse(void) {
     ProcessSystem(10);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Freq Pulse (ON)", golden, read, TRUE);
+    AnalyzeResult_Block("Freq Pulse (ON)", golden, read, TRUE,TEST_BLOCK_ID);
 
     ProcessSystem(90); 
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Freq Pulse (OFF Gap)", golden, read, FALSE);
+    AnalyzeResult_Block("Freq Pulse (OFF Gap)", golden, read, FALSE,TEST_BLOCK_ID);
 
     ProcessSystem(110); 
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Freq Pulse (ON Again)", golden, read, TRUE);
+    AnalyzeResult_Block("Freq Pulse (ON Again)", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_MultiBit_Mask(void) {
@@ -388,7 +314,7 @@ void Test_MultiBit_Mask(void) {
     ProcessSystem(5);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Multi-Bit Mask", golden, read, TRUE);
+    AnalyzeResult_Block("Multi-Bit Mask", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_Concurrency_Stress(void) {
@@ -414,7 +340,7 @@ void Test_Concurrency_Stress(void) {
     ProcessSystem(10);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Concurrency Stress", golden, read, TRUE);
+    AnalyzeResult_Block("Concurrency Stress", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_Fls_BitFlip_Visual(void) {
@@ -440,7 +366,7 @@ void Test_Fls_BitFlip_Visual(void) {
     printf("   Byte 0 Expected: "); PrintBinary(golden[0]); printf("\n");
     printf("   Byte 0 Actual:   "); PrintBinary(read[0]); printf("\n");
     
-    AnalyzeResult("Visual Bit Flip", golden, read, TRUE);
+    AnalyzeResult_Block("Visual Bit Flip", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_Fls_TimeWindow(void) {
@@ -465,21 +391,21 @@ void Test_Fls_TimeWindow(void) {
     ProcessSystem(10); 
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Time Window (Before)", golden, read, FALSE);
+    AnalyzeResult_Block("Time Window (Before)", golden, read, FALSE,TEST_BLOCK_ID);
 
     printf("   [Step 2] Writing Inside Window...\n");
     ProcessSystem(startWindow - GetSystemTimeMs() + 50); 
     ResetBuffer(sent, 0x11); memcpy(golden, sent, BUFFER_SIZE);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Time Window (Inside)", golden, read, TRUE);
+    AnalyzeResult_Block("Time Window (Inside)", golden, read, TRUE,TEST_BLOCK_ID);
 
     printf("   [Step 3] Writing After Window...\n");
     ProcessSystem(endWindow - GetSystemTimeMs() + 50);
     ResetBuffer(sent, 0x22); memcpy(golden, sent, BUFFER_SIZE);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
-    AnalyzeResult("Time Window (After)", golden, read, FALSE);
+    AnalyzeResult_Block("Time Window (After)", golden, read, FALSE,TEST_BLOCK_ID);
 }
 
 void Test_Fls_XOR_Logic(void) {
@@ -503,7 +429,7 @@ void Test_Fls_XOR_Logic(void) {
     memset(read, 0x00, BUFFER_SIZE);
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
 
-    AnalyzeResult("XOR Logic", golden, read, TRUE);
+    AnalyzeResult_Block("XOR Logic", golden, read, TRUE,TEST_BLOCK_ID);
 }
 
 void Test_Case1_RedundantBlock(void) {
@@ -542,7 +468,7 @@ PrintBuffer("write ", golden, BUFFER_SIZE);
 void Test_Case2_NativeWithROM(void) {
     printf("=== CASE 2: Native Block with ROM Default (Block 3) ===\n");
     printf("   [NVM202] Load default values if CRC fails.\n");
-    uint16_t blockId = 4; /* Maps to BlockDescriptors[3] which has RomBlock3_Default */
+    uint16_t blockId = 5; /* Maps to BlockDescriptors[3] which has RomBlock3_Default */
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE];
     uint8 rom_golden[BUFFER_SIZE];
     memset(rom_golden, 0xDD, BUFFER_SIZE); /* From RomBlock3_Default */
@@ -551,7 +477,7 @@ void Test_Case2_NativeWithROM(void) {
 
     /* 1. Write corrupted data so CRC fails */
     Fault_Clear(TARGET_NVM_READ_BLOCK);
-    FaultState_Activate_fault(TARGET_NVM_READ_BLOCK, FAULT_DATA_CORRUPTION, 500, 0);
+    FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_DATA_CORRUPTION, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 500;
@@ -597,7 +523,9 @@ void Test_Case3_NativeNoROM(void) {
 void Test_Case4_Test_Case4_Dataset(void) {
     printf("=== CASE 4: Dataset Block (Block 5) ===\n");
     printf("   [NVM] Writing to different dataset slots.\n");
-    uint16_t blockId = 5; 
+    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(FAULT_TARGET_FLS);
+    uint16_t blockId = 6;
     uint8 data1[BUFFER_SIZE], data2[BUFFER_SIZE];
     uint8 read1[BUFFER_SIZE], read2[BUFFER_SIZE];
     
@@ -621,7 +549,7 @@ void Test_Case4_Test_Case4_Dataset(void) {
     memset(read2, 0, BUFFER_SIZE);
     NvM_SetDataIndex(blockId, 1);
     NvM_ReadBlock(blockId, read2); WaitForBlock(blockId);
-
+    printf("   [DEBUG] Expected Slot 0: 0x11, Actual Slot 0: 0x%02X\n", read1[0]);
     AnalyzeResult_Block("Case 4 Dataset Slot 0", data1, read1, FALSE, blockId);
     AnalyzeResult_Block("Case 4 Dataset Slot 1", data2, read2, FALSE, blockId);
 }
@@ -787,7 +715,8 @@ void Test_ParamCorruption_SetDataIndex(void) {
 void Test_NVM698_ImplicitSync(void) {
     printf("=== TEST NVM698: Implicit Synchronization ===\n");
     printf("   [NVM698] Application must not modify RAM block until request is done.\n");
-    
+    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(FAULT_TARGET_FLS);
     uint16_t blockId = TEST_BLOCK_ID;
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0xAA);
@@ -839,7 +768,8 @@ Std_ReturnType Mock_NvMWriteRamBlockToNvM(void* NvMBuffer) {
 void Test_NVM705_ExplicitSync(void) {
     printf("=== TEST NVM705: Explicit Synchronization ===\n");
     printf("   [NVM705] App can modify RAM block until NvMWriteRamBlockToNvM is called.\n");
-    
+    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(FAULT_TARGET_FLS);
     uint16_t blockId = TEST_BLOCK_ID;
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     memset(golden, 0xCC, BUFFER_SIZE); /* Expected to be copied by callback */
@@ -881,7 +811,8 @@ void Test_NVM705_ExplicitSync(void) {
 void Test_NVM579_ExplicitSync_Retry(void) {
     printf("=== TEST NVM579: Explicit Sync Retry Limit ===\n");
     printf("   [NVM579] NvM retries NvMWriteRamBlockToNvM NvMRepeatMirrorOperations times.\n");
-    
+    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(FAULT_TARGET_FLS);
     mock_explicit_sync_calls = 0;
     mock_explicit_sync_success = FALSE; /* App always returns E_NOT_OK */
     
@@ -913,7 +844,8 @@ void Test_NVM579_ExplicitSync_Retry(void) {
 void Test_NVM212_CRC_Recalc(void) {
     printf("=== TEST NVM212: CRC Recalculation ===\n");
     printf("   [NVM212] NvM_WriteBlock requests CRC recalculation before copying to NV.\n");
-    
+    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(FAULT_TARGET_FLS);
     /* This implies testing that the CRC matches the data we write.
        Our existing architecture tests this implicitly (if CRC was wrong, integrity would fail).
        We will explicitly demonstrate writing and validating integrity. */

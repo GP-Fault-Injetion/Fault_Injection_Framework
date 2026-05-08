@@ -23,7 +23,7 @@
 void NvM_JobEndNotification(void);
 void NvM_JobErrorNotification(void);
 
-/* Defined in Fee_Cfg.h as 2 */
+/* Defined in Fee_Cfg.h as 8*/
 const Fee_BlockConfigType Fee_BlockConfig[FEE_NUM_OF_BLOCKS] = {
     /* Block 0: RESERVED/CONFIG Block (Mapped to NvM Block 1) */
     {
@@ -61,6 +61,33 @@ const Fee_BlockConfigType Fee_BlockConfig[FEE_NUM_OF_BLOCKS] = {
     {
         .DeviceIndex = 0,
         .BlockNumber = 5,
+        .BlockSize = 66,
+        .ImmediateData = FALSE,
+        .NumberOfWriteCycles = 0
+    },
+    
+    /* --- NEW BLOCKS ADDED FOR FREEDOM --- */
+    
+    /* Block 5: DATA Block (Mapped to Dataset Slot 0) */
+    {
+        .DeviceIndex = 0,
+        .BlockNumber = 6,
+        .BlockSize = 66,   /* 64 bytes data + 2 bytes CRC */
+        .ImmediateData = FALSE,
+        .NumberOfWriteCycles = 0
+    },
+    /* Block 6: DATA Block (Mapped to Dataset Slot 1) */
+    {
+        .DeviceIndex = 0,
+        .BlockNumber = 7,
+        .BlockSize = 66,
+        .ImmediateData = FALSE,
+        .NumberOfWriteCycles = 0
+    },
+    /* Block 7: Spare DATA Block (Buffer to hit 8 blocks) */
+    {
+        .DeviceIndex = 0,
+        .BlockNumber = 8,
         .BlockSize = 66,
         .ImmediateData = FALSE,
         .NumberOfWriteCycles = 0

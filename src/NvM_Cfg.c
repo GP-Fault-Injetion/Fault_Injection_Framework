@@ -21,7 +21,7 @@ uint8 RomBlock3_Default[64] = {
 const NvM_BlockDescriptorType BlockDescriptors[] = {
     /* Block 0: MultiBlock (Required by AUTOSAR, usually reserved) */
     {
-        .NvramBlockIdentifier = 0,
+        .NvramBlockIdentifier = 1,
         .BlockManagementType = NVM_BLOCK_NATIVE,
         .RamBlockDataAddress = NULL, 
         .NvBlockLength = 0
@@ -30,7 +30,7 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
 
     /* Block 1: Reserved Block */
     {
-        .NvramBlockIdentifier = 1,
+        .NvramBlockIdentifier = 2,
         .BlockManagementType = NVM_BLOCK_NATIVE,
         .BlockJobPriority = 0,
         .BlockWriteProt = FALSE,
@@ -49,7 +49,7 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
 
     /* Block 2: Redundant Block (Case 1) */
     {
-        .NvramBlockIdentifier = 2,
+        .NvramBlockIdentifier = 3,
         .BlockManagementType = NVM_BLOCK_REDUNDANT,
         .BlockJobPriority = 0,
         .BlockWriteProt = FALSE,
@@ -69,7 +69,7 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
 
     /* Block 3: Native with ROM Default (Case 2) */
     {
-        .NvramBlockIdentifier = 3,
+        .NvramBlockIdentifier = 4,
         .BlockManagementType = NVM_BLOCK_NATIVE,
         .BlockJobPriority = 0,
         .BlockWriteProt = FALSE,
@@ -89,7 +89,7 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
 
     /* Block 4: Native without ROM Default (Case 3) */
     {
-        .NvramBlockIdentifier = 4,
+        .NvramBlockIdentifier = 5,
         .BlockManagementType = NVM_BLOCK_NATIVE,
         .BlockJobPriority = 0,
         .BlockWriteProt = FALSE,
@@ -105,7 +105,27 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
         .NvramDeviceId = 0,
         .NvBlockBaseNumber=5,
         .RomBlockDataAdress = NULL
-    }
+    },
+    /* Block 5: Dataset Block (Case 4) */
+        {
+            .NvramBlockIdentifier = 6,
+            .BlockManagementType = NVM_BLOCK_DATASET,  /* <-- This must be DATASET */
+            .BlockJobPriority = 0,
+            .BlockWriteProt = FALSE,
+            .WriteBlockOnce = FALSE,
+            .SelectBlockForReadall = TRUE,
+            .ResistantToChangesSw = FALSE,
+            .NvBlockLength = 64,
+            .BlockUseCrc = TRUE,
+            .BlockCRCType = NVM_CRC16,
+            .RamBlockDataAddress = NULL,               /* Or point to a valid RAM mirror */
+            .CalcRamBlockCrc = TRUE,
+            .NvBlockNum = 2,                           /* <-- Must be at least 2 for slots 0 and 1 */
+            .NvramDeviceId = 0,
+            .NvBlockBaseNumber = 6,                    /* Make sure this doesn't overlap previous blocks */
+            .RomBlockDataAdress = NULL
+        }/* Block 6: Dataset Block (Case 4) */
+
 };
 
 const NvM_ConfigType NvM_Config = {

@@ -70,17 +70,17 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
              switch(cfg->Type) {
                  case FAULT_DELAY:
                  {
-                     /* Simulate Delay using a busy wait loop */
-                     volatile uint32_t delayCount = 10000; /* Arbitrary dummy value */
-                     while(delayCount--) {}
+                   //to be implemented
                      break;
                  }
                  case FAULT_OMISSION:
+                 {
+                     //to be implemented
+                       break;
+                 }
                  case FAULT_QUEUE_OVERFLOW:
                  {
-                     /* Return without passing the job to the NvM queue */
-                     callOriginal = FALSE;
-                     retVal = E_NOT_OK;
+                     //just call the original function
                      break;
                  }
                  case FAULT_PARAMETER_CORRUPTION:
@@ -99,7 +99,8 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
                  }
                  /* Data corruption faults (FAULT_DATA_CORRUPTION, FAULT_BIT_FLIP, etc.)
                     should NOT be injected here for WriteBlock. They should be injected
-                    at the FLS/FEE layer to properly simulate hardware failure. */
+                    at the FLS/FEE layer so that CRC can discover it , if we injected here wrong CRC will
+                  be calculated and it becomes the app resposibelity not BSW . */
                  default:
                      break;
              }
@@ -135,17 +136,17 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
              switch(cfg->Type) {
                  case FAULT_DELAY:
                  {
-                     /* Simulate Delay using a busy wait loop */
-                     volatile uint32_t delayCount = 10000; /* Arbitrary dummy value */
-                     while(delayCount--) {}
+                   //to be implemented
                      break;
                  }
                  case FAULT_OMISSION:
+                 {
+                     //to be implemented
+                       break;
+                 }
                  case FAULT_QUEUE_OVERFLOW:
                  {
-                     /* Return without executing */
-                     callOriginal = FALSE;
-                     retVal = E_NOT_OK;
+                     //just call the original function
                      break;
                  }
                  case FAULT_PARAMETER_CORRUPTION:
@@ -161,21 +162,11 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
                      corruptReturnValue = TRUE;
                      break;
                  }
-                 case FAULT_DATA_CORRUPTION:
-                 case FAULT_CRC_DATA_CORRUPTION:
-                 case FAULT_BIT_FLIP:
-                 case FAULT_MULTI_BIT_FLIP:
-                 case FAULT_STUCK_AT_0:
-                 case FAULT_STUCK_AT_1:
-                 {
-                     /* For structural consistency, we inject here. 
-                        Note: For asynchronous reads, actual corruption 
-                        should ideally happen after data is placed in DstPtr. */
-                     if(dataLength > 0 && NvM_DstPtr != NULL) {
-                         Fault_Inject((uint8*)NvM_DstPtr, dataLength, cfg);
-                     }
-                     break;
-                 }
+                 /* Data corruption faults (FAULT_DATA_CORRUPTION, FAULT_BIT_FLIP, etc.)
+                  should NOT be injected here for ReadBlock. They should be injected
+                  at the FLS/FEE layer since NVMRead is async func corrupting the buffer *NvM_DstPtr
+                  will just be overwritten by correct data*/
+                 
                  default:
                      break;
              }
@@ -207,17 +198,17 @@ Std_ReturnType Hook_NvM_InvalidateNvBlock( NvM_BlockIdType blockId ) {
              switch(cfg->Type) {
                  case FAULT_DELAY:
                  {
-                     /* Simulate Delay using a busy wait loop */
-                     volatile uint32_t delayCount = 10000; 
-                     while(delayCount--) {}
+                   //to be implemented
                      break;
                  }
                  case FAULT_OMISSION:
+                 {
+                     //to be implemented
+                       break;
+                 }
                  case FAULT_QUEUE_OVERFLOW:
                  {
-                     /* Return without passing the job to the NvM queue */
-                     callOriginal = FALSE;
-                     retVal = E_NOT_OK;
+                     //just call the original function
                      break;
                  }
                  case FAULT_PARAMETER_CORRUPTION:
@@ -264,17 +255,17 @@ Std_ReturnType Hook_NvM_EraseNvBlock( NvM_BlockIdType blockId ) {
              switch(cfg->Type) {
                  case FAULT_DELAY:
                  {
-                     /* Simulate Delay using a busy wait loop */
-                     volatile uint32_t delayCount = 10000; 
-                     while(delayCount--) {}
+                   //to be implemented
                      break;
                  }
                  case FAULT_OMISSION:
+                 {
+                     //to be implemented
+                       break;
+                 }
                  case FAULT_QUEUE_OVERFLOW:
                  {
-                     /* Return without passing the job to the NvM queue */
-                     callOriginal = FALSE;
-                     retVal = E_NOT_OK;
+                     //just call the original function
                      break;
                  }
                  case FAULT_PARAMETER_CORRUPTION:

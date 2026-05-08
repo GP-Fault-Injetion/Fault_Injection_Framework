@@ -30,7 +30,7 @@
 /* --- Queue & Size Config --- */
 #define NVM_SIZE_STANDARD_JOB_QUEUE     5        /* Size of the Job Queue */
 #define NVM_SIZE_IMMEDIATE_JOB_QUEUE    5        /* Size of the High Priority Queue */
-#define NVM_NUM_OF_NVRAM_BLOCKS         5        /* Block 0 + Block 1 */
+#define NVM_NUM_OF_NVRAM_BLOCKS         6
 
 /* --- Default Settings --- */
 #define NVM_API_CONFIG_CLASS            3 
