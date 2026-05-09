@@ -1,5 +1,4 @@
 #include "Fault_DataLogic.h"
-#include <stddef.h>
 
 /* Internal State for Xorshift32 */
 static uint32 xorshift_state = 0xDEADC0DE; 

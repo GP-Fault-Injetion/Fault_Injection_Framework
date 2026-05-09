@@ -1,5 +1,4 @@
 #include "FaultInjection_Interface.h"
-#include <stddef.h>
 
 Std_ReturnType Fault_Init(void) {
     FaultState_Init();
@@ -49,6 +48,6 @@ Std_ReturnType Fault_Inject(uint8_t* data, uint32_t length, FaultConfig_t* confi
     return status;
 }
 
-void Fault_Clear(uint16_t TargetModuleID) {
-    FaultState_Clear(TargetModuleID);
+void Fault_Clear(uint16_t TargetModuleServiceID) {
+    FaultState_Clear(TargetModuleServiceID);
 }

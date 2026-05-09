@@ -294,6 +294,7 @@
 #include "Dem.h"
 #endif
 #define NVM_INTERNAL_BUILD
+#include "hook.h"
 #include "MemIf.h"
 #include "SchM_NvM.h"
 #include "MemMap.h"
