@@ -91,6 +91,7 @@
 #include "MemMap.h"
 #include "Cpu.h"
 #include "SchM_Fee.h"
+#define FEE_INTERNAL_BUILD
 #include "hook.h"
 /* The FLS_ERASED_VALIUE is not published by some MCALs,
  * this is a way around this.
@@ -1388,9 +1389,9 @@ static void Idle(void) {
         sint32 bytesToWrite = (CurrentJob.Write.Invalidate == 1)? 0 : (sint32)Fee_Config.BlockConfig[CurrentJob.Write.BlockIdx].BlockSize;
         sint32 identifybytes = ((sint32)AdminFls.GarbageCollect.TotalFeeSize + bytesToWrite + (sint32) ADMIN_SIZE + (sint32) FORCED_GARBAGE_COLLECT_MARGIN);
         if(((AdminFls.pendingJob & (uint8)PENDING_FORCED_GARBAGE_COLLECT_JOB) == 0) &&
-           (remainingBytesInBank < identifybytes) &&
-           (nextBank == AdminFls.GarbageCollect.BankIdx)
-           ) {
+        (remainingBytesInBank < identifybytes) &&
+        (nextBank == AdminFls.GarbageCollect.BankIdx)
+        ) {
             // no room for all data when this data written, and all banks written: set forced garbage collect
             AdminFls.pendingJob |= (uint8)PENDING_FORCED_GARBAGE_COLLECT_JOB;
             // stay in idle and perform a new evaluation in next main loop

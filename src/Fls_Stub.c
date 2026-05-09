@@ -57,6 +57,7 @@ Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, ui
         return E_NOT_OK;
     }
     if ((TargetAddress + Length) > FLASH_SIZE) return E_NOT_OK;
+
     memcpy(&VirtualFlashMemory[TargetAddress], SourceAddressPtr, Length);
     IsEraseJobPending = FALSE;
     Fls_JobResult = MEMIF_JOB_PENDING;
@@ -72,6 +73,7 @@ Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Le
         return E_NOT_OK;
     }
     if ((SourceAddress + Length) > FLASH_SIZE) return E_NOT_OK;
+
     memcpy(TargetAddressPtr, &VirtualFlashMemory[SourceAddress], Length);
     IsEraseJobPending = FALSE;
     Fls_JobResult = MEMIF_JOB_PENDING;

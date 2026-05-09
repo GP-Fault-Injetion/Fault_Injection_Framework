@@ -26,7 +26,7 @@ Std_ReturnType Fault_Inject(uint8_t* data,uint32_t length,FaultConfig_t* config)
 
 /**
  * @brief Resets active faults (like Stuck-At) for a specific module( Stops the fault)
- * @param[in] TargetModuleID  ID of the module to clear.
+ * @param[in] TargetModuleServiceID  ID of the module to clear.
  */
 
 void Fault_Clear(uint16_t FaultID); // Clears the fault configuration for a specific Fault

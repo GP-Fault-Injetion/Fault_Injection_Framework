@@ -93,12 +93,12 @@ Std_ReturnType FaultState_Activate_fault(uint16_t moduleId, FaultType_t type, ui
     return E_OK;
 }
 
-boolean FaultState_IsActive(uint16_t module_service_Id, uint16_t fault_Id) {
+boolean FaultState_IsActive(uint16_t moduleId, uint16_t fault_Id) {
     if (fault_Id >= MAX_ACTIVE_FAULTS) {
         return FALSE;
     }
     
-    if ((Fault_Table[fault_Id].TargetModuleServiceID == module_service_Id) &&
+    if ((Fault_Table[fault_Id].TargetModuleServiceID == moduleId) && 
         (Fault_Table[fault_Id].Active == TRUE)) {
         return TRUE;
     }

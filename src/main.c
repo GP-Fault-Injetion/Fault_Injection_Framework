@@ -7,6 +7,7 @@
     #include "Std_Types.h"
     #include "NvM.h"
     #include "MemIf.h"
+    #include "Fee.h"
     #include "Crc.h"
 
     /* Force fflush on all prints for debugging */
@@ -14,10 +15,14 @@
     #define printf(...) do { fprintf(stdout, __VA_ARGS__); fflush(stdout); } while(0)
 
     /* Fault Injection Headers */
-    #define ENABLE_FAULT_INJECTION_HOOKS 
+    #define ENABLE_FAULT_INJECTION_HOOKS
     #include "hook.h"
     #include "FaultInjection_Interface.h"
     #include "Fault_state.h"
+
+    /* --- FEE Configuration --- */
+    #define FEE_TEST_BLOCK_ID   2
+    #define FEE_BUFFER_SIZE     66
 
     /* --- Configuration --- */
     #define TEST_BLOCK_ID   2
@@ -345,13 +350,83 @@
             default: 
                 printf("Status Code: %d\n", readStatus);
         }
-
     
 
         AnalyzeResult("Visual Bit Flip", golden, read, TRUE);
     }
 
 
+
+    /* =========================================================================
+    * FEE TESTS
+    * ========================================================================= */
+
+    void Test_Fee_BitFlip_Visual(void) {
+        printf("=== TEST: FEE Visual Bit Flip (Bit 3) ===\n");
+        printf("   Goal: Flip Bit 3 of Byte 0 at FEE layer through NvM flow.\n\n");
+
+        uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
+
+        memset(sent, 0x00, BUFFER_SIZE);
+        memcpy(golden, sent, BUFFER_SIZE);
+
+        printf("[GOLDEN BUFFER - Before Write]\n");
+        PrintBuffer("Golden", golden, NULL);
+
+        Fault_Clear(TARGET_FEE_WRITE);
+        Fault_Clear(TARGET_FLS_WRITE);
+        Fault_Clear(TARGET_NVM_WRITE_BLOCK);
+
+        FaultState_Activate_fault(TARGET_FEE_WRITE, FAULT_DATA_CORRUPTION, 500, 0);
+        FaultConfig_t* cfg = FaultState_GetConfig(0);
+        cfg->Start_TimeMs = GetSystemTimeMs();
+        cfg->End_timeMs   = cfg->Start_TimeMs + 500;
+        cfg->BitPosition  = 3;
+
+        printf("\n[FAULT INJECTION ACTIVE]\n");
+        printf("Target: FEE\n");
+        printf("Type: DATA_CORRUPTION\n");
+        printf("Byte 0, Bit 3\n");
+        printf("Injection Window: %u ms to %u ms\n\n", cfg->Start_TimeMs, cfg->End_timeMs);
+
+        ProcessSystem(10);
+
+        printf("[WRITE PHASE]\n");
+        NvM_WriteBlock(TEST_BLOCK_ID, sent);
+        WaitForNvM();
+
+        NvM_RequestResultType writeStatus;
+        NvM_GetErrorStatus(TEST_BLOCK_ID, &writeStatus);
+        printf("[NvM Status After Write]: ");
+        switch (writeStatus) {
+            case NVM_REQ_OK:               printf("NVM_REQ_OK\n"); break;
+            case NVM_REQ_INTEGRITY_FAILED: printf("NVM_REQ_INTEGRITY_FAILED\n"); break;
+            case NVM_REQ_NOT_OK:           printf("NVM_REQ_NOT_OK\n"); break;
+            case NVM_REQ_NV_INVALIDATED:   printf("NVM_REQ_NV_INVALIDATED\n"); break;
+            default:                       printf("Status Code: %d\n", writeStatus); break;
+        }
+
+        memset(read, 0x00, BUFFER_SIZE);
+
+        printf("\n[READ PHASE]\n");
+        NvM_ReadBlock(TEST_BLOCK_ID, read);
+        WaitForNvM();
+
+        PrintBuffer("Read Back", read, golden);
+
+        NvM_RequestResultType readStatus;
+        NvM_GetErrorStatus(TEST_BLOCK_ID, &readStatus);
+        printf("\n[NvM Status After Read]: ");
+        switch (readStatus) {
+            case NVM_REQ_OK:               printf("NVM_REQ_OK\n"); break;
+            case NVM_REQ_INTEGRITY_FAILED: printf("NVM_REQ_INTEGRITY_FAILED\n"); break;
+            case NVM_REQ_NOT_OK:           printf("NVM_REQ_NOT_OK\n"); break;
+            case NVM_REQ_NV_INVALIDATED:   printf("NVM_REQ_NV_INVALIDATED\n"); break;
+            default:                       printf("Status Code: %d\n", readStatus); break;
+        }
+
+        AnalyzeResult("FEE Visual Bit Flip", golden, read, TRUE);
+    }
 
     /* =========================================================================
     * NEW TESTS FOR FLS READ AND ERASE HOOKS
@@ -858,8 +933,9 @@
         Fault_Init(); 
             
         
-        Test_BitFlip_Immediate(); 
-        Test_Fls_BitFlip_Visual(); 
+        Test_BitFlip_Immediate();
+        Test_Fls_BitFlip_Visual();
+        Test_Fee_BitFlip_Visual();
         Test_Fls_Read_DataCorruption();
         Test_Fls_Erase_DataCorruption();
         Test_Fls_Write_ParameterCorruption_NullPointer();
