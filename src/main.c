@@ -8,6 +8,7 @@
 #include "NvM.h"
 #include "MemIf.h"
 #include "Fee.h"
+#include "Fls.h"
 #include "Crc.h"
 
 /* Force fflush on all prints for debugging */
