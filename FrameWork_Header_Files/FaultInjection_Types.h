@@ -64,19 +64,19 @@ typedef struct {
     uint16_t TargetModuleServiceID;           /**< ID of the module to target */
     uint16_t FaultID;                 /**< Unique identifier for the fault instance */
 
-    
+
     boolean  Active;                   /**< Master enable/disable switch */
     uint32_t  running;                 //the error running state
 
-    
-    
-    
+
+
+
     uint32_t Start_TimeMs;             /**< Value for the trigger (e.g., 100ms or 5th call) */
     uint32_t DurationMs;                   /**< How long the fault lasts */
     uint32_t End_timeMs;                   /**< Time to stop injecting the fault */
     uint32_t Freq;                         ///**< Frequency of fault injection */
     uint32_t current_start_time;          /**< Current start time tracking */
-    
+
     uint8_t BitPosition;               /**< Specific bit to flip (if applicable) */
     uint32_t Mask;                     /**< Mask for MultiBit flip(if applicable)*/
 } FaultConfig_t;

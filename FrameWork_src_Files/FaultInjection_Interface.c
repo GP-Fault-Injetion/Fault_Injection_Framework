@@ -3,7 +3,7 @@
 Std_ReturnType Fault_Init(void) {
     FaultState_Init();
     /* Seed random number generator for data logic */
-    Fault_SeedRandom(0x12345678); 
+    Fault_SeedRandom(0x12345678);
     return E_OK;
 }
 
