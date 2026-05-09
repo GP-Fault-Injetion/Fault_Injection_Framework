@@ -1,14 +1,15 @@
 #include "Fls.h"
+#include <stdio.h>
 #include <string.h>
 
 /* 20KB Virtual Flash Memory */
 #define FLASH_SIZE 32768 
 static uint8 VirtualFlashMemory[FLASH_SIZE];
 static MemIf_JobResultType Fls_JobResult = MEMIF_JOB_OK;
-
+/* Tell the compiler to look for this function in another file (main.c) */
+extern uint32_t GetSystemTimeMs(void);
 /* Define the global flag required by Fee */
 volatile boolean FlsJobReady = TRUE;
-
 void Fls_Init(const void* ConfigPtr) {
     memset(VirtualFlashMemory, FLS_ERASE_VALUE, FLASH_SIZE);
     Fls_JobResult = MEMIF_JOB_OK;
@@ -27,7 +28,6 @@ Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length) {
 Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length) {
     if ((TargetAddress + Length) > FLASH_SIZE) return E_NOT_OK;
     memcpy(&VirtualFlashMemory[TargetAddress], SourceAddressPtr, Length);
-    
     Fls_JobResult = MEMIF_JOB_OK;
     FlsJobReady = TRUE;
     return E_OK;

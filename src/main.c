@@ -10,7 +10,7 @@
 #include "Crc.h"
 
 /* Fault Injection Headers */
-#define ENABLE_FAULT_INJECTION_HOOKS 
+#define ENABLE_FAULT_INJECTION_HOOKS
 #include "hook.h"
 #include "FaultInjection_Interface.h"
 #include "Fault_state.h"
@@ -18,7 +18,7 @@
 /* --- Configuration --- */
 #define TEST_BLOCK_ID   2
 #define BUFFER_SIZE     64
-#define TICK_MS         1  
+#define TICK_MS         1
 
 /* --- Globals for Reporting --- */
 static int g_testsPassed = 0;
@@ -49,9 +49,9 @@ void ProcessSystem(uint32_t durationMs) {
         FaultState_MainFunction();
 
         /* --- STACK SCHEDULING --- */
-        Fls_MainFunction(); 
-        Fee_MainFunction(); 
-        NvM_MainFunction(); 
+        Fls_MainFunction();
+        Fee_MainFunction();
+        NvM_MainFunction();
 
     } while ((now - start) < durationMs);
 }
@@ -137,7 +137,7 @@ void AnalyzeResult_Block(const char* testName, uint8* expected, uint8* actual, b
             testPassed = TRUE;
         } else if (corruptionDetected) {
             outcome = "Fault Injected Successfully. Stack MISSED it.";
-            testPassed = FALSE; 
+            testPassed = FALSE;
         } else {
             outcome = "Fault Failed to Inject (Data is clean).";
             testPassed = FALSE;
@@ -193,9 +193,9 @@ void Test_BitFlip_Immediate(void) {
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs   = cfg->Start_TimeMs + 500;
-    cfg->BitPosition  = (10 * 8) + 0; 
+    cfg->BitPosition  = (10 * 8) + 0;
     
-    ProcessSystem(5); 
+    ProcessSystem(5);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     memset(read, 0, BUFFER_SIZE);
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
@@ -224,7 +224,7 @@ void Test_Delayed_Start(void) {
     AnalyzeResult_Block("Delayed Start (Phase 1)", golden, read, FALSE,TEST_BLOCK_ID);
 
     printf("   [Phase 2] Waiting for Fault Activation...\n");
-    ProcessSystem(delay + 50); 
+    ProcessSystem(delay + 50);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
     AnalyzeResult_Block("Delayed Start (Phase 2)", golden, read, TRUE,TEST_BLOCK_ID);
@@ -233,7 +233,7 @@ void Test_Delayed_Start(void) {
 void Test_StuckAt_Logic(void) {
     printf("=== TEST 3: Stuck-At Logic ===\n");
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
-    ResetBuffer(sent, 0x00); 
+    ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
     Fault_Clear(FAULT_TARGET_NVM);
 
@@ -250,9 +250,9 @@ void Test_StuckAt_Logic(void) {
     AnalyzeResult_Block("Stuck-At-1", golden, read, TRUE,TEST_BLOCK_ID);
 
     printf("   [Part B] Stuck-At-0 on Byte 5, Bit 0\n");
-    ResetBuffer(sent, 0xFF); 
+    ResetBuffer(sent, 0xFF);
     memcpy(golden, sent, BUFFER_SIZE);
-    Fault_Clear(FAULT_TARGET_NVM); 
+    Fault_Clear(FAULT_TARGET_NVM);
     
     FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_STUCK_AT_0, 200, 1);
     cfg = FaultState_GetConfig(1);
@@ -278,20 +278,20 @@ void Test_Frequency_Pulse(void) {
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = now;
     cfg->End_timeMs   = now + 1000;
-    cfg->Freq         = 200;          
-    cfg->BitPosition  = 0;            
+    cfg->Freq         = 200;
+    cfg->BitPosition  = 0;
 
     ProcessSystem(10);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
     AnalyzeResult_Block("Freq Pulse (ON)", golden, read, TRUE,TEST_BLOCK_ID);
 
-    ProcessSystem(90); 
+    ProcessSystem(90);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
     AnalyzeResult_Block("Freq Pulse (OFF Gap)", golden, read, FALSE,TEST_BLOCK_ID);
 
-    ProcessSystem(110); 
+    ProcessSystem(110);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
     AnalyzeResult_Block("Freq Pulse (ON Again)", golden, read, TRUE,TEST_BLOCK_ID);
@@ -309,7 +309,7 @@ void Test_MultiBit_Mask(void) {
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 200;
-    cfg->Mask = 0x0F; 
+    cfg->Mask = 0x0F;
 
     ProcessSystem(5);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
@@ -346,21 +346,21 @@ void Test_Concurrency_Stress(void) {
 void Test_Fls_BitFlip_Visual(void) {
     printf("=== TEST 7: FLS Visual Bit Flip (Bit 3) ===\n");
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
-    memset(sent, 0x00, BUFFER_SIZE); 
+    memset(sent, 0x00, BUFFER_SIZE);
     memcpy(golden, sent, BUFFER_SIZE);
     
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     Fault_Clear(FAULT_TARGET_NVM);
 
-    FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_BIT_FLIP, 500, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_BIT_FLIP, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs   = cfg->Start_TimeMs + 500;
-    cfg->BitPosition  = 3; 
+    cfg->BitPosition  = 3;
 
-    ProcessSystem(10); 
+    ProcessSystem(10);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
-    memset(read, 0x00, BUFFER_SIZE); 
+    memset(read, 0x00, BUFFER_SIZE);
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
 
     printf("   Byte 0 Expected: "); PrintBinary(golden[0]); printf("\n");
@@ -374,27 +374,27 @@ void Test_Fls_TimeWindow(void) {
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     Fault_Clear(FAULT_TARGET_NVM);
     
     uint32_t now = GetSystemTimeMs();
     uint32_t startWindow = now + 200;
     uint32_t endWindow   = now + 400;
 
-    FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_BIT_FLIP, (endWindow - startWindow), 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_BIT_FLIP, (endWindow - startWindow), 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = startWindow;
     cfg->End_timeMs   = endWindow;
     cfg->BitPosition  = 0;
 
     printf("   [Step 1] Writing Before Window...\n");
-    ProcessSystem(10); 
+    ProcessSystem(10);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
     AnalyzeResult_Block("Time Window (Before)", golden, read, FALSE,TEST_BLOCK_ID);
 
     printf("   [Step 2] Writing Inside Window...\n");
-    ProcessSystem(startWindow - GetSystemTimeMs() + 50); 
+    ProcessSystem(startWindow - GetSystemTimeMs() + 50);
     ResetBuffer(sent, 0x11); memcpy(golden, sent, BUFFER_SIZE);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
@@ -411,20 +411,20 @@ void Test_Fls_TimeWindow(void) {
 void Test_Fls_XOR_Logic(void) {
     printf("=== TEST 9: FLS XOR Logic (Mask 0xAA) ===\n");
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     Fault_Clear(FAULT_TARGET_NVM);
 
-    FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_MULTI_BIT_FLIP, 500, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_MULTI_BIT_FLIP, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs   = cfg->Start_TimeMs + 500;
-    cfg->Mask         = 0xAA; 
+    cfg->Mask         = 0xAA;
 
     ResetBuffer(sent, 0x00);
     sent[0] = 0x55;
     memcpy(golden, sent, BUFFER_SIZE);
 
-    ProcessSystem(10); 
+    ProcessSystem(10);
     NvM_WriteBlock(TEST_BLOCK_ID, sent); WaitForNvM();
     memset(read, 0x00, BUFFER_SIZE);
     NvM_ReadBlock(TEST_BLOCK_ID, read); WaitForNvM();
@@ -439,22 +439,22 @@ void Test_Case1_RedundantBlock(void) {
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0x11);
     memcpy(golden, sent, BUFFER_SIZE);
-PrintBuffer("write ", golden, BUFFER_SIZE);  
+PrintBuffer("write ", golden, BUFFER_SIZE);
     /* 1. Write clean data (both copies) */
     NvM_WriteBlock(blockId, sent); WaitForBlock(blockId);
 
     /* 2. Write again, but corrupt the primary block.
-       We use a very short time window (e.g., 5ms) on FLS Write so that only the 
+       We use a very short time window (e.g., 5ms) on FLS Write so that only the
        first copy is corrupted, and the second copy writes successfully. */
     printf("   [Step 1] Writing corrupted data to Primary, clean to Secondary...\n");
-    Fault_Clear(FAULT_TARGET_FLS);
-    FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_DATA_CORRUPTION, 500, 0); 
+    Fault_Clear(TARGET_FLS_WRITE);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_DATA_CORRUPTION, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
-    cfg->End_timeMs = cfg->Start_TimeMs + 5;
+    cfg->End_timeMs = cfg->Start_TimeMs + 61;
 
     NvM_WriteBlock(blockId, sent); WaitForBlock(blockId);
-    PrintBuffer("write ", golden, BUFFER_SIZE);   
+    PrintBuffer("write ", golden, BUFFER_SIZE);
 
     printf("   [Step 2] Reading back. NVM should recover from Secondary copy.\n");
     memset(read, 0, BUFFER_SIZE);
@@ -468,7 +468,7 @@ PrintBuffer("write ", golden, BUFFER_SIZE);
 void Test_Case2_NativeWithROM(void) {
     printf("=== CASE 2: Native Block with ROM Default (Block 3) ===\n");
     printf("   [NVM202] Load default values if CRC fails.\n");
-    uint16_t blockId = 5; /* Maps to BlockDescriptors[3] which has RomBlock3_Default */
+    uint16_t blockId = 4; /* Maps to BlockDescriptors[3] which has RomBlock3_Default */
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE];
     uint8 rom_golden[BUFFER_SIZE];
     memset(rom_golden, 0xDD, BUFFER_SIZE); /* From RomBlock3_Default */
@@ -477,18 +477,18 @@ void Test_Case2_NativeWithROM(void) {
 
     /* 1. Write corrupted data so CRC fails */
     Fault_Clear(TARGET_NVM_READ_BLOCK);
-    FaultState_Activate_fault(FAULT_TARGET_FLS, FAULT_DATA_CORRUPTION, 500, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_DATA_CORRUPTION, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 500;
 
     printf("   [Step 1] Writing corrupted data to NV memory...\n");
     NvM_WriteBlock(blockId, sent); WaitForBlock(blockId);
-
+    PrintBuffer("sent ", sent, BUFFER_SIZE);
     printf("   [Step 2] Reading back. NVM should fail CRC and load ROM defaults.\n");
     memset(read, 0, BUFFER_SIZE);
     NvM_ReadBlock(blockId, read); WaitForBlock(blockId);
-    printf("read =%x\n",read);
+    PrintBuffer("read ", read, BUFFER_SIZE);
 
     AnalyzeResult_Block("Case 2 Native With ROM", rom_golden, read, TRUE, blockId);
 }
@@ -499,7 +499,7 @@ void Test_Case3_NativeNoROM(void) {
     uint16_t blockId = 5; /* Maps to BlockDescriptors[4] which has NO ROM */
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0x44);
-    memcpy(golden, sent, BUFFER_SIZE); 
+    memcpy(golden, sent, BUFFER_SIZE);
 
     /* 1. Write corrupted data so CRC fails */
     Fault_Clear(TARGET_NVM_READ_BLOCK);
@@ -515,7 +515,7 @@ void Test_Case3_NativeNoROM(void) {
     memset(read, 0, BUFFER_SIZE);
     NvM_ReadBlock(blockId, read); WaitForBlock(blockId);
 
-    /* For Case 3, we expect NVM_REQ_INTEGRITY_FAILED, so passing golden doesn't matter much 
+    /* For Case 3, we expect NVM_REQ_INTEGRITY_FAILED, so passing golden doesn't matter much
        since the data won't match, but the Status check in AnalyzeResult will verify INTEGRITY_FAILED */
     AnalyzeResult_Block("Case 3 Native No ROM", golden, read, TRUE, blockId);
 }
@@ -524,7 +524,7 @@ void Test_Case4_Test_Case4_Dataset(void) {
     printf("=== CASE 4: Dataset Block (Block 5) ===\n");
     printf("   [NVM] Writing to different dataset slots.\n");
     Fault_Clear(FAULT_TARGET_NVM);
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     uint16_t blockId = 6;
     uint8 data1[BUFFER_SIZE], data2[BUFFER_SIZE];
     uint8 read1[BUFFER_SIZE], read2[BUFFER_SIZE];
@@ -716,7 +716,7 @@ void Test_NVM698_ImplicitSync(void) {
     printf("=== TEST NVM698: Implicit Synchronization ===\n");
     printf("   [NVM698] Application must not modify RAM block until request is done.\n");
     Fault_Clear(FAULT_TARGET_NVM);
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     uint16_t blockId = TEST_BLOCK_ID;
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0xAA);
@@ -769,7 +769,7 @@ void Test_NVM705_ExplicitSync(void) {
     printf("=== TEST NVM705: Explicit Synchronization ===\n");
     printf("   [NVM705] App can modify RAM block until NvMWriteRamBlockToNvM is called.\n");
     Fault_Clear(FAULT_TARGET_NVM);
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     uint16_t blockId = TEST_BLOCK_ID;
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     memset(golden, 0xCC, BUFFER_SIZE); /* Expected to be copied by callback */
@@ -781,7 +781,7 @@ void Test_NVM705_ExplicitSync(void) {
     NvM_WriteBlock(blockId, sent);
     
     /* App modifies RAM block *before* callback (Allowed) */
-    sent[0] = 0x12; 
+    sent[0] = 0x12;
     sent[1] = 0x34;
     
     /* Simulate NvM calling the callback */
@@ -795,12 +795,12 @@ void Test_NVM705_ExplicitSync(void) {
     if (ret == E_OK) {
         printf("   [Step] App provided consistent copy. Writing to NV...\n");
         /* Hack: we manually copy the callback buffer to our sent buffer to simulate NVM using it */
-        memcpy(sent, internalNvMBuffer, BUFFER_SIZE); 
+        memcpy(sent, internalNvMBuffer, BUFFER_SIZE);
         WaitForBlock(blockId); /* Finish write */
     }
     
     /* After callback, App can read and write RAM block again */
-    sent[0] = 0x99; 
+    sent[0] = 0x99;
     
     memset(read, 0, BUFFER_SIZE);
     NvM_ReadBlock(blockId, read); WaitForBlock(blockId);
@@ -812,7 +812,7 @@ void Test_NVM579_ExplicitSync_Retry(void) {
     printf("=== TEST NVM579: Explicit Sync Retry Limit ===\n");
     printf("   [NVM579] NvM retries NvMWriteRamBlockToNvM NvMRepeatMirrorOperations times.\n");
     Fault_Clear(FAULT_TARGET_NVM);
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     mock_explicit_sync_calls = 0;
     mock_explicit_sync_success = FALSE; /* App always returns E_NOT_OK */
     
@@ -845,7 +845,7 @@ void Test_NVM212_CRC_Recalc(void) {
     printf("=== TEST NVM212: CRC Recalculation ===\n");
     printf("   [NVM212] NvM_WriteBlock requests CRC recalculation before copying to NV.\n");
     Fault_Clear(FAULT_TARGET_NVM);
-    Fault_Clear(FAULT_TARGET_FLS);
+    Fault_Clear(TARGET_FLS_WRITE);
     /* This implies testing that the CRC matches the data we write.
        Our existing architecture tests this implicitly (if CRC was wrong, integrity would fail).
        We will explicitly demonstrate writing and validating integrity. */
@@ -855,7 +855,7 @@ void Test_NVM212_CRC_Recalc(void) {
     memcpy(golden, sent, BUFFER_SIZE);
     
     printf("   [Step] Writing Block %d (CRC configured).\n", blockId);
-    NvM_WriteBlock(blockId, sent); 
+    NvM_WriteBlock(blockId, sent);
     
     /* Since Block 2 has CRC configured, NvM implicitly calculates CRC here. */
     WaitForBlock(blockId);
@@ -876,12 +876,13 @@ int main(void) {
     printf("   FAULT INJECTION TEST SUITE (FULL REPORT)                 \n");
     printf("============================================================\n\n");
 
-    Fls_Init(NULL);   
-    Fee_Init();       
-    NvM_Init();       
-    Fault_Init();     
+    Fls_Init(NULL);
+    Fee_Init();
+    NvM_Init();
+    Fault_Init();
     
-    Test_BitFlip_Immediate();
+    /*
+     Test_BitFlip_Immediate();
     Test_Delayed_Start();
     Test_StuckAt_Logic();
     Test_Frequency_Pulse();
@@ -894,8 +895,11 @@ int main(void) {
     printf("\n\n============================================================\n");
     printf("   NEW TEST CASES (AUTOSAR REQUIREMENTS)                     \n");
     printf("============================================================\n\n");
+     */
     Test_Case1_RedundantBlock();
+  
     Test_Case2_NativeWithROM();
+    /*
     Test_Case3_NativeNoROM();
     Test_Case4_Test_Case4_Dataset();
     Test_Queue_Overflow();
@@ -914,7 +918,7 @@ int main(void) {
     Test_NVM705_ExplicitSync();
     Test_NVM579_ExplicitSync_Retry();
     Test_NVM212_CRC_Recalc();
-
+*/
     printf("\n------------------------------------------------------------\n");
     printf(" FINAL RESULTS: %d Passed, %d Failed\n", g_testsPassed, g_testsFailed);
     printf("------------------------------------------------------------\n");

@@ -6,6 +6,7 @@ uint8 RamBlock1_Reserved[64];
 uint8 RamBlock2_Test[64];
 uint8 RamBlock3_Test[64];
 uint8 RamBlock4_Test[64];
+uint8 RamBlock5_Dataset[64];
 
 uint8 RomBlock3_Default[64] = {
     0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD, 0xDD,
@@ -118,7 +119,7 @@ const NvM_BlockDescriptorType BlockDescriptors[] = {
             .NvBlockLength = 64,
             .BlockUseCrc = TRUE,
             .BlockCRCType = NVM_CRC16,
-            .RamBlockDataAddress = NULL,               /* Or point to a valid RAM mirror */
+            .RamBlockDataAddress = RamBlock5_Dataset,               /* Or point to a valid RAM mirror */
             .CalcRamBlockCrc = TRUE,
             .NvBlockNum = 2,                           /* <-- Must be at least 2 for slots 0 and 1 */
             .NvramDeviceId = 0,
@@ -134,3 +135,4 @@ const NvM_ConfigType NvM_Config = {
     },
     .BlockDescriptor = BlockDescriptors
 };
+

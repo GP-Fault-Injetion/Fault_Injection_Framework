@@ -368,15 +368,15 @@ Std_ReturnType Hook_NvM_SetDataIndex( NvM_BlockIdType blockId, uint8 DataIndex )
 
 /* --- FLS WRITE HOOK IMPLEMENTATION --- */
 Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length) {
-    
-    uint8 tempBuffer[512]; 
+   //printf("FLSSSSSSSSS.\n");
+    uint8 tempBuffer[512];
     uint32 actualLen = (Length > 512) ? 512 : Length;
 
     memcpy(tempBuffer, SourceAddressPtr, actualLen);
 
     uint16_t i;
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_FLS, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_FLS_WRITE, i) == TRUE) {
              
              /* SMART FILTERING: Check for Magic Number */
              if (IsFeeHeader(SourceAddressPtr, actualLen) == FALSE) {
@@ -384,14 +384,15 @@ Std_ReturnType Hook_Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPt
                  /* Double Check: Only inject if size looks like Data (>= 32) */
                  if (Length >= 32) {
                      FaultConfig_t* cfg = FaultState_GetConfig(i);
-                     // printf("[Hook] Injecting FLS Fault on Data (Len=%d)\n", Length);
+                      //printf("[Hook] Injecting FLS Fault on Data (Len=%d)\n", Length);
                      Fault_Inject(tempBuffer, actualLen, cfg);
                  }
              } else {
-                 // printf("[Hook] Fee Header Detected. Skipping.\n");
+                  //printf("[Hook] Fee Header Detected. Skipping.\n");
              }
         }
     }
 
     return Fls_Write(TargetAddress, tempBuffer, actualLen);
+    
 }

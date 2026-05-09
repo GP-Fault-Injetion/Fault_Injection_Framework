@@ -54,7 +54,6 @@
 #define TARGET_FLS_GET_JOB_RESULT         0x5C06
 #define TARGET_FLS_MAIN_FUNCTION          0x5CFF
 
-#define FAULT_TARGET_FLS                  0x5C00
 /** @} */
 
 /**
