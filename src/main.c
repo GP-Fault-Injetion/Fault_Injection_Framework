@@ -709,7 +709,7 @@
 
         /* Activate return value corruption fault for FLS_WRITE */
         Fault_Clear(TARGET_FLS_WRITE);
-        FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_RETURN_VALUE_CORRUPTION, 500, 0);
+        FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION, 500, 0);
         FaultConfig_t* cfg = FaultState_GetConfig(0);
         cfg->Start_TimeMs = GetSystemTimeMs();
         cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -759,7 +759,7 @@
 
         /* Activate return value corruption fault for FLS_READ */
         Fault_Clear(TARGET_FLS_READ);
-        FaultState_Activate_fault(TARGET_FLS_READ, FAULT_RETURN_VALUE_CORRUPTION, 500, 0);
+        FaultState_Activate_fault(TARGET_FLS_READ, FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION, 500, 0);
         FaultConfig_t* cfg = FaultState_GetConfig(0);
         cfg->Start_TimeMs = GetSystemTimeMs();
         cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -812,7 +812,7 @@
 
         /* Activate return value corruption fault for FLS_ERASE */
         Fault_Clear(TARGET_FLS_ERASE);
-        FaultState_Activate_fault(TARGET_FLS_ERASE, FAULT_RETURN_VALUE_CORRUPTION, 500, 0);
+        FaultState_Activate_fault(TARGET_FLS_ERASE, FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION, 500, 0);
         FaultConfig_t* cfg = FaultState_GetConfig(0);
         cfg->Start_TimeMs = GetSystemTimeMs();
         cfg->End_timeMs   = cfg->Start_TimeMs + 500;
