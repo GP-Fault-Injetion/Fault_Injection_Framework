@@ -188,8 +188,8 @@ void Test_BitFlip_Immediate(void) {
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
 
-    Fault_Clear(FAULT_TARGET_NVM);
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_BIT_FLIP, 500, 0);
+    Fault_Clear(TARGET_FLS_WRITE);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_BIT_FLIP, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -209,11 +209,11 @@ void Test_Delayed_Start(void) {
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
     
-    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(TARGET_FLS_WRITE);
     uint32_t now = GetSystemTimeMs();
     uint32_t delay = 200;
 
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_CRC_DATA_CORRUPTION, 500, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_CRC_DATA_CORRUPTION, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = now + delay;
     cfg->End_timeMs   = cfg->Start_TimeMs + 500;
@@ -235,10 +235,10 @@ void Test_StuckAt_Logic(void) {
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
-    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(TARGET_FLS_WRITE);
 
     printf("   [Part A] Stuck-At-1 on Byte 5, Bit 4\n");
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_STUCK_AT_1, 200, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_STUCK_AT_1, 200, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 200;
@@ -252,9 +252,9 @@ void Test_StuckAt_Logic(void) {
     printf("   [Part B] Stuck-At-0 on Byte 5, Bit 0\n");
     ResetBuffer(sent, 0xFF);
     memcpy(golden, sent, BUFFER_SIZE);
-    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(TARGET_FLS_WRITE);
     
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_STUCK_AT_0, 200, 1);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_STUCK_AT_0, 200, 1);
     cfg = FaultState_GetConfig(1);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 200;
@@ -271,10 +271,10 @@ void Test_Frequency_Pulse(void) {
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
-    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(TARGET_FLS_WRITE);
 
     uint32_t now = GetSystemTimeMs();
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_BIT_FLIP, 50, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_BIT_FLIP, 50, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = now;
     cfg->End_timeMs   = now + 1000;
@@ -302,10 +302,10 @@ void Test_MultiBit_Mask(void) {
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
-    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(TARGET_FLS_WRITE);
 
     printf("   [Config] Applying Mask 0x0F to Byte 0\n");
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_MULTI_BIT_FLIP, 200, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_MULTI_BIT_FLIP, 200, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 200;
@@ -322,18 +322,18 @@ void Test_Concurrency_Stress(void) {
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
-    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(TARGET_FLS_WRITE);
     uint32_t now = GetSystemTimeMs();
 
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_BIT_FLIP, 500, 0);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_BIT_FLIP, 500, 0);
     FaultConfig_t* c0 = FaultState_GetConfig(0);
     c0->Start_TimeMs = now; c0->End_timeMs = now + 500; c0->BitPosition = 0;
 
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_STUCK_AT_1, 500, 1);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_STUCK_AT_1, 500, 1);
     FaultConfig_t* c1 = FaultState_GetConfig(1);
     c1->Start_TimeMs = now; c1->End_timeMs = now + 500; c1->BitPosition = 15;
 
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_DATA_CORRUPTION, 500, 2);
+    FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_DATA_CORRUPTION, 500, 2);
     FaultConfig_t* c2 = FaultState_GetConfig(2);
     c2->Start_TimeMs = now; c2->End_timeMs = now + 500;
 
@@ -350,7 +350,6 @@ void Test_Fls_BitFlip_Visual(void) {
     memcpy(golden, sent, BUFFER_SIZE);
     
     Fault_Clear(TARGET_FLS_WRITE);
-    Fault_Clear(FAULT_TARGET_NVM);
 
     FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_BIT_FLIP, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
@@ -375,7 +374,6 @@ void Test_Fls_TimeWindow(void) {
     ResetBuffer(sent, 0x00);
     memcpy(golden, sent, BUFFER_SIZE);
     Fault_Clear(TARGET_FLS_WRITE);
-    Fault_Clear(FAULT_TARGET_NVM);
     
     uint32_t now = GetSystemTimeMs();
     uint32_t startWindow = now + 200;
@@ -412,7 +410,6 @@ void Test_Fls_XOR_Logic(void) {
     printf("=== TEST 9: FLS XOR Logic (Mask 0xAA) ===\n");
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
     Fault_Clear(TARGET_FLS_WRITE);
-    Fault_Clear(FAULT_TARGET_NVM);
 
     FaultState_Activate_fault(TARGET_FLS_WRITE, FAULT_MULTI_BIT_FLIP, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
@@ -523,7 +520,6 @@ void Test_Case3_NativeNoROM(void) {
 void Test_Case4_Test_Case4_Dataset(void) {
     printf("=== CASE 4: Dataset Block (Block 5) ===\n");
     printf("   [NVM] Writing to different dataset slots.\n");
-    Fault_Clear(FAULT_TARGET_NVM);
     Fault_Clear(TARGET_FLS_WRITE);
     uint16_t blockId = 6;
     uint8 data1[BUFFER_SIZE], data2[BUFFER_SIZE];
@@ -644,11 +640,11 @@ void Test_ParamCorruption_WriteBlock(void) {
     uint8 data[BUFFER_SIZE];
     ResetBuffer(data, 0x00);
     
-    Fault_Clear(FAULT_TARGET_NVM);
+   
     Last_Det_Error = 0; /* Reset DET tracker */
 
     /* Activate Parameter Corruption */
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_PARAMETER_CORRUPTION, 500, 0);
+    FaultState_Activate_fault(TARGET_NVM_WRITE_BLOCK, FAULT_PARAMETER_CORRUPTION, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 500;
@@ -675,11 +671,11 @@ void Test_ParamCorruption_SetDataIndex(void) {
     printf("=== TEST: Parameter Corruption (NvM_SetDataIndex) ===\n");
     printf("   Goal: Verify BSW catches out-of-bounds Dataset Index.\n");
     
-    Fault_Clear(FAULT_TARGET_NVM);
+    Fault_Clear(TARGET_NVM_WRITE_BLOCK);
     Last_Det_Error = 0; /* Reset DET tracker */
 
     /* Activate Parameter Corruption */
-    FaultState_Activate_fault(FAULT_TARGET_NVM, FAULT_PARAMETER_CORRUPTION, 500, 0);
+    FaultState_Activate_fault(TARGET_NVM_WRITE_BLOCK, FAULT_PARAMETER_CORRUPTION, 500, 0);
     FaultConfig_t* cfg = FaultState_GetConfig(0);
     cfg->Start_TimeMs = GetSystemTimeMs();
     cfg->End_timeMs = cfg->Start_TimeMs + 500;
@@ -715,7 +711,7 @@ void Test_ParamCorruption_SetDataIndex(void) {
 void Test_NVM698_ImplicitSync(void) {
     printf("=== TEST NVM698: Implicit Synchronization ===\n");
     printf("   [NVM698] Application must not modify RAM block until request is done.\n");
-    Fault_Clear(FAULT_TARGET_NVM);
+    
     Fault_Clear(TARGET_FLS_WRITE);
     uint16_t blockId = TEST_BLOCK_ID;
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
@@ -768,7 +764,6 @@ Std_ReturnType Mock_NvMWriteRamBlockToNvM(void* NvMBuffer) {
 void Test_NVM705_ExplicitSync(void) {
     printf("=== TEST NVM705: Explicit Synchronization ===\n");
     printf("   [NVM705] App can modify RAM block until NvMWriteRamBlockToNvM is called.\n");
-    Fault_Clear(FAULT_TARGET_NVM);
     Fault_Clear(TARGET_FLS_WRITE);
     uint16_t blockId = TEST_BLOCK_ID;
     uint8 sent[BUFFER_SIZE], read[BUFFER_SIZE], golden[BUFFER_SIZE];
@@ -811,7 +806,6 @@ void Test_NVM705_ExplicitSync(void) {
 void Test_NVM579_ExplicitSync_Retry(void) {
     printf("=== TEST NVM579: Explicit Sync Retry Limit ===\n");
     printf("   [NVM579] NvM retries NvMWriteRamBlockToNvM NvMRepeatMirrorOperations times.\n");
-    Fault_Clear(FAULT_TARGET_NVM);
     Fault_Clear(TARGET_FLS_WRITE);
     mock_explicit_sync_calls = 0;
     mock_explicit_sync_success = FALSE; /* App always returns E_NOT_OK */
@@ -844,7 +838,6 @@ void Test_NVM579_ExplicitSync_Retry(void) {
 void Test_NVM212_CRC_Recalc(void) {
     printf("=== TEST NVM212: CRC Recalculation ===\n");
     printf("   [NVM212] NvM_WriteBlock requests CRC recalculation before copying to NV.\n");
-    Fault_Clear(FAULT_TARGET_NVM);
     Fault_Clear(TARGET_FLS_WRITE);
     /* This implies testing that the CRC matches the data we write.
        Our existing architecture tests this implicitly (if CRC was wrong, integrity would fail).
@@ -881,7 +874,7 @@ int main(void) {
     NvM_Init();
     Fault_Init();
     
-    /*
+    
      Test_BitFlip_Immediate();
     Test_Delayed_Start();
     Test_StuckAt_Logic();
@@ -895,11 +888,11 @@ int main(void) {
     printf("\n\n============================================================\n");
     printf("   NEW TEST CASES (AUTOSAR REQUIREMENTS)                     \n");
     printf("============================================================\n\n");
-     */
+     
     Test_Case1_RedundantBlock();
   
     Test_Case2_NativeWithROM();
-    /*
+   
     Test_Case3_NativeNoROM();
     Test_Case4_Test_Case4_Dataset();
     Test_Queue_Overflow();
@@ -918,7 +911,7 @@ int main(void) {
     Test_NVM705_ExplicitSync();
     Test_NVM579_ExplicitSync_Retry();
     Test_NVM212_CRC_Recalc();
-*/
+
     printf("\n------------------------------------------------------------\n");
     printf(" FINAL RESULTS: %d Passed, %d Failed\n", g_testsPassed, g_testsFailed);
     printf("------------------------------------------------------------\n");

@@ -64,7 +64,7 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
 
 
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_NVM_WRITE_BLOCK, i) == TRUE) {
              FaultConfig_t* cfg = FaultState_GetConfig(i);
              
              switch(cfg->Type) {
@@ -91,10 +91,16 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
                      activeSrcPtr = NULL;
                      break;
                  }
-                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 case FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION:
                  {
                      /* Corrupt the return value after calling the original function */
                      corruptReturnValue = TRUE;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_REJECTION:
+                 {
+                     /* Do not call the original function */
+                     callOriginal = FALSE;
                      break;
                  }
                  /* Data corruption faults (FAULT_DATA_CORRUPTION, FAULT_BIT_FLIP, etc.)
@@ -114,6 +120,11 @@ Std_ReturnType Hook_NvM_WriteBlock( NvM_BlockIdType blockId, const void *NvM_Src
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
         }
     }
+    else
+    {
+      /* NvM_E_NOT_OK */
+      retVal = E_NOT_OK;
+    }
 
     return retVal;
 }
@@ -129,7 +140,7 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
     void* activeDstPtr = NvM_DstPtr;
 
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_NVM_READ_BLOCK, i) == TRUE) {
              FaultConfig_t* cfg = FaultState_GetConfig(i);
              uint32_t dataLength = GetNvMBlockLength(activeBlockId);
              
@@ -157,9 +168,16 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
                      activeDstPtr = NULL;
                      break;
                  }
-                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 case FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION:
                  {
+                     /* Corrupt the return value after calling the original function */
                      corruptReturnValue = TRUE;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_REJECTION:
+                 {
+                     /* Do not call the original function */
+                     callOriginal = FALSE;
                      break;
                  }
                  /* Data corruption faults (FAULT_DATA_CORRUPTION, FAULT_BIT_FLIP, etc.)
@@ -179,6 +197,11 @@ Std_ReturnType Hook_NvM_ReadBlock( NvM_BlockIdType blockId, void *NvM_DstPtr ) {
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
         }
     }
+    else
+    {
+      /* NvM_E_NOT_OK */
+      retVal = E_NOT_OK;
+    }
 
     return retVal;
 }
@@ -192,7 +215,7 @@ Std_ReturnType Hook_NvM_InvalidateNvBlock( NvM_BlockIdType blockId ) {
     NvM_BlockIdType activeBlockId = blockId;
 
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_NVM_INVALIDATE_NV_BLOCK, i) == TRUE) {
              FaultConfig_t* cfg = FaultState_GetConfig(i);
              
              switch(cfg->Type) {
@@ -217,10 +240,16 @@ Std_ReturnType Hook_NvM_InvalidateNvBlock( NvM_BlockIdType blockId ) {
                      activeBlockId ^= 0xFFFF;
                      break;
                  }
-                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 case FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION:
                  {
                      /* Corrupt the return value after calling the original function */
                      corruptReturnValue = TRUE;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_REJECTION:
+                 {
+                     /* Do not call the original function */
+                     callOriginal = FALSE;
                      break;
                  }
                  default:
@@ -236,6 +265,11 @@ Std_ReturnType Hook_NvM_InvalidateNvBlock( NvM_BlockIdType blockId ) {
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
         }
     }
+    else
+    {
+      /* NvM_E_NOT_OK */
+      retVal = E_NOT_OK;
+    }
 
     return retVal;
 }
@@ -249,7 +283,7 @@ Std_ReturnType Hook_NvM_EraseNvBlock( NvM_BlockIdType blockId ) {
     NvM_BlockIdType activeBlockId = blockId;
 
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_NVM_ERASE_NV_BLOCK, i) == TRUE) {
              FaultConfig_t* cfg = FaultState_GetConfig(i);
              
              switch(cfg->Type) {
@@ -274,10 +308,16 @@ Std_ReturnType Hook_NvM_EraseNvBlock( NvM_BlockIdType blockId ) {
                      activeBlockId ^= 0xFFFF;
                      break;
                  }
-                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 case FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION:
                  {
                      /* Corrupt the return value after calling the original function */
                      corruptReturnValue = TRUE;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_REJECTION:
+                 {
+                     /* Do not call the original function */
+                     callOriginal = FALSE;
                      break;
                  }
                  default:
@@ -292,6 +332,11 @@ Std_ReturnType Hook_NvM_EraseNvBlock( NvM_BlockIdType blockId ) {
         if(corruptReturnValue == TRUE) {
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
         }
+    }
+    else
+    {
+      /* NvM_E_NOT_OK */
+      retVal = E_NOT_OK;
     }
 
     return retVal;
@@ -309,7 +354,7 @@ Std_ReturnType Hook_NvM_SetDataIndex( NvM_BlockIdType blockId, uint8 DataIndex )
     uint8 activeDataIndex = DataIndex;
 
     for(i = 0; i < MAX_ACTIVE_FAULTS; i++) {
-        if(FaultState_IsActive(FAULT_TARGET_NVM, i) == TRUE) {
+        if(FaultState_IsActive(TARGET_NVM_SET_DATA_INDEX, i) == TRUE) {
              FaultConfig_t* cfg = FaultState_GetConfig(i);
              
              switch(cfg->Type) {
@@ -341,10 +386,16 @@ Std_ReturnType Hook_NvM_SetDataIndex( NvM_BlockIdType blockId, uint8 DataIndex )
                      activeDataIndex = 255;     /* Flip bits to create a garbage Data Index */
                      break;
                  }
-                 case FAULT_RETURN_VALUE_CORRUPTION:
+                 case FAULT_RETURN_VALUE_OBSERVATION_CORRUPTION:
                  {
-                     /* Flag to corrupt the return value after calling the original function */
+                     /* Corrupt the return value after calling the original function */
                      corruptReturnValue = TRUE;
+                     break;
+                 }
+                 case FAULT_RETURN_VALUE_REJECTION:
+                 {
+                     /* Do not call the original function */
+                     callOriginal = FALSE;
                      break;
                  }
                  default:
@@ -361,6 +412,11 @@ Std_ReturnType Hook_NvM_SetDataIndex( NvM_BlockIdType blockId, uint8 DataIndex )
         if(corruptReturnValue == TRUE) {
             retVal = (retVal == E_OK) ? E_NOT_OK : E_OK;
         }
+    }
+    else
+    {
+      /* NvM_E_NOT_OK */
+      retVal = E_NOT_OK;
     }
 
     return retVal;
