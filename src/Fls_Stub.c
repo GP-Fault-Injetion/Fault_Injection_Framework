@@ -26,11 +26,7 @@ Std_ReturnType Fls_Erase(uint32 TargetAddress, uint32 Length) {
 
 Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, uint32 Length) {
     if ((TargetAddress + Length) > FLASH_SIZE) return E_NOT_OK;
-    int x=0;
-    while(x<100)
-    {
-        x++;
-    }
+
     memcpy(&VirtualFlashMemory[TargetAddress], SourceAddressPtr, Length);
     
     Fls_JobResult = MEMIF_JOB_OK;
@@ -40,11 +36,7 @@ Std_ReturnType Fls_Write(uint32 TargetAddress, const uint8* SourceAddressPtr, ui
 
 Std_ReturnType Fls_Read(uint32 SourceAddress, uint8* TargetAddressPtr, uint32 Length) {
     if ((SourceAddress + Length) > FLASH_SIZE) return E_NOT_OK;
-        int x=0;
-    while(x<100)
-    {
-        x++;
-    }
+
     memcpy(TargetAddressPtr, &VirtualFlashMemory[SourceAddress], Length);
     
     Fls_JobResult = MEMIF_JOB_OK;
