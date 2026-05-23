@@ -1,4 +1,4 @@
-![Siemens Logo](siemenslogo.png)
+
 
 <p align="center">
   <img src="siemenslogo.png" alt="Siemens Logo" height="60" />
