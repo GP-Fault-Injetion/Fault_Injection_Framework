@@ -1,5 +1,4 @@
 
-
 <p align="center">
   <img src="siemenslogo.png" alt="Siemens Logo" height="60" />
   &nbsp;&nbsp;&nbsp;&nbsp;
